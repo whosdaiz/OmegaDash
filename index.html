@@ -98,6 +98,7 @@
         <button class="nav-item" data-tab="settings">
           <svg viewBox="0 0 24 24"><path d="M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7ZM19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.83 2.83-.06-.06a1.7 1.7 0 0 0-1.88-.34 1.7 1.7 0 0 0-1.03 1.56V21h-4v-.08A1.7 1.7 0 0 0 8.95 19.4a1.7 1.7 0 0 0-1.88.34l-.06.06-2.83-2.83.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-1.56-1.03H3v-4h.08A1.7 1.7 0 0 0 4.6 8.95a1.7 1.7 0 0 0-.34-1.88l-.06-.06 2.83-2.83.06.06A1.7 1.7 0 0 0 8.95 4.6 1.7 1.7 0 0 0 9.98 3H14v.08a1.7 1.7 0 0 0 1.03 1.56 1.7 1.7 0 0 0 1.88-.34l.06-.06 2.83 2.83-.06.06a1.7 1.7 0 0 0-.34 1.88 1.7 1.7 0 0 0 1.56 1.03H21v4h-.08A1.7 1.7 0 0 0 19.4 15Z"/></svg>
           <span>Settings</span>
+          <span class="nav-dot update-dot" hidden></span>
         </button>
       </nav>
 
@@ -562,6 +563,15 @@
         </div>
 
         <div class="settings-grid">
+          <article class="settings-card version-card" id="appVersionRow">
+            <div class="version-copy">
+              <p>Current version: <b id="appCurrentVer">1.0</b></p>
+              <p>Latest version: <b id="appLatestVer">—</b></p>
+              <small id="appVersionNote" hidden></small>
+            </div>
+            <button type="button" class="reset-btn version-update-btn" id="appVersionBtn" disabled>No update</button>
+          </article>
+
           <article class="settings-card theme-card-wide">
             <div class="settings-card-head"><div><span class="settings-icon">✦</span><div><h3>Appearance</h3><p>Choose a visual theme. Changes apply instantly.</p></div></div></div>
             <div class="theme-group">
@@ -880,6 +890,24 @@
         </div>
       </div>
       <div class="logs-view packet-log-view" id="packetLogView" tabindex="0"></div>
+    </div>
+  </div>
+  <div id="versionPopup" class="confirm-overlay version-popup" hidden>
+    <div class="confirm-card" role="dialog" aria-modal="true" aria-labelledby="versionPopupTitle" aria-describedby="versionPopupCopy">
+      <div class="confirm-head">
+        <span class="confirm-icon" aria-hidden="true">↑</span>
+        <div>
+          <p class="eyebrow">UPDATE</p>
+          <h3 id="versionPopupTitle">New version detected</h3>
+        </div>
+        <button type="button" class="guide-x version-popup-x" id="versionPopupClose" aria-label="Close">
+          <svg viewBox="0 0 12 12"><path d="M3 3l6 6M9 3l-6 6"/></svg>
+        </button>
+      </div>
+      <p id="versionPopupCopy">A newer OmegaDash is available.</p>
+      <div class="confirm-actions">
+        <button type="button" class="settings-save" id="versionPopupGithub">Open GitHub</button>
+      </div>
     </div>
   </div>
   <div id="changelogPopup" class="confirm-overlay log-set-overlay" hidden>
