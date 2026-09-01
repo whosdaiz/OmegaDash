@@ -1,0 +1,954 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OmegaDash — CS2 Telemetry</title>
+  <link rel="icon" href="icons/omegadash.ico" type="image/x-icon">
+  <link rel="icon" href="icons/omegadash.png" type="image/png">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body class="text-slate-200 antialiased">
+  <div class="win-resize" data-edge="n"></div>
+  <div class="win-resize" data-edge="s"></div>
+  <div class="win-resize" data-edge="e"></div>
+  <div class="win-resize" data-edge="w"></div>
+  <div class="win-resize" data-edge="ne"></div>
+  <div class="win-resize" data-edge="nw"></div>
+  <div class="win-resize" data-edge="se"></div>
+  <div class="win-resize" data-edge="sw"></div>
+  <header class="titlebar">
+    <div class="titlebar-drag">
+      <span class="titlebar-mark" aria-hidden="true"><i></i><b></b></span>
+      <strong>OMEGA<span>DASH</span></strong>
+      <em>made by whosdaiz</em>
+    </div>
+    <button type="button" class="titlebar-launch" id="launchOmega">Launch Omega</button>
+    <div class="window-controls">
+      <button type="button" class="win-btn" id="winMin" aria-label="Minimize">
+        <svg viewBox="0 0 12 12"><path d="M2 6h8"/></svg>
+      </button>
+      <button type="button" class="win-btn" id="winMax" aria-label="Maximize">
+        <svg class="win-max" viewBox="0 0 12 12"><rect x="2.25" y="2.25" width="7.5" height="7.5" rx="0.6"/></svg>
+        <svg class="win-restore" viewBox="0 0 12 12"><path d="M4 3.4h4.6V8"/><rect x="2.2" y="4.2" width="5.6" height="5.6" rx="0.5"/></svg>
+      </button>
+      <button type="button" class="win-btn close" id="winClose" aria-label="Close">
+        <svg viewBox="0 0 12 12"><path d="M3 3l6 6M9 3l-6 6"/></svg>
+      </button>
+    </div>
+  </header>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-mark"><span></span><i></i></div>
+        <div>
+          <p class="brand-name">OMEGA<span>DASH</span></p>
+          <p class="brand-sub">CS2 TELEMETRY</p>
+        </div>
+      </div>
+
+      <nav class="nav-list" aria-label="Main navigation">
+        <button class="nav-item active" data-tab="overall">
+          <svg viewBox="0 0 24 24"><path d="M4 13h6V4H4v9Zm0 7h6v-4H4v4Zm10 0h6V11h-6v9Zm0-16v4h6V4h-6Z"/></svg>
+          <span>Overall Stats</span>
+        </button>
+        <button class="nav-item" data-tab="last-match">
+          <svg viewBox="0 0 24 24"><path d="M7 3v2H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2V3h-2v2H9V3H7Zm12 16H5v-8h14v8Z"/></svg>
+          <span>Last Match</span>
+          <span class="nav-dot live-dot" hidden></span>
+        </button>
+        <button class="nav-item" data-tab="matches">
+          <svg viewBox="0 0 24 24"><path d="M5 3h14a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Zm0 10h14a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2Z"/></svg>
+          <span>Last 20 Matches</span>
+        </button>
+        <button class="nav-item" data-tab="maps">
+          <svg viewBox="0 0 24 24"><path d="M9 20 3.55 17.28A1 1 0 0 1 3 16.38V5.62a1 1 0 0 1 1.45-.89L9 7m0 13 6-3m-6 3V7m6 10 5.45 2.72A1 1 0 0 0 21 18.38V7.62a1 1 0 0 0-.55-.89L15 4m0 13V4m0 0L9 7"/></svg>
+          <span>Maps</span>
+        </button>
+        <button class="nav-item" data-tab="weapons">
+          <svg viewBox="0 0 24 24"><path d="M5 18h3l1-3h6l1 3h3l-2-12H7L5 18Zm7-9 1.2 3.6H10.8L12 9Z"/></svg>
+          <span>Weapons</span>
+        </button>
+        <button class="nav-item" data-tab="sensitivity">
+          <svg viewBox="0 0 24 24"><path d="M11 2h2v3.06A7 7 0 0 1 18.94 11H22v2h-3.06A7 7 0 0 1 13 18.94V22h-2v-3.06A7 7 0 0 1 5.06 13H2v-2h3.06A7 7 0 0 1 11 5.06V2Zm1 5a5 5 0 1 0 0 10 5 5 0 0 0 0-10Zm0 3a2 2 0 1 1 0 4 2 2 0 0 1 0-4Z"/></svg>
+          <span>Sensitivity Finder</span>
+        </button>
+        <button class="nav-item" data-tab="loot">
+          <svg viewBox="0 0 24 24"><path d="M4 10h16v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-8Zm0 0V8a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v2M12 10v10M4 14h16"/></svg>
+          <span>Loot</span>
+          <span class="nav-dot loot-dot" hidden></span>
+        </button>
+        <button class="nav-item" data-tab="inventory">
+          <svg viewBox="0 0 24 24"><path d="M6 7V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v2"/><path d="M4 7h16v13a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7Z"/><path d="M9 11v2M15 11v2"/></svg>
+          <span>Inventory</span>
+        </button>
+        <button class="nav-item" data-tab="config">
+          <svg viewBox="0 0 24 24"><path d="M8 7 3 12l5 5M16 7l5 5-5 5M14 4l-4 16"/></svg>
+          <span>Scripts</span>
+        </button>
+        <button class="nav-item" data-tab="logs">
+          <svg viewBox="0 0 24 24"><path d="M5 5h14v14H5V5Zm3 5 3 3-3 3M12 15h5"/></svg>
+          <span>Logs</span>
+        </button>
+        <button class="nav-item" data-tab="settings">
+          <svg viewBox="0 0 24 24"><path d="M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7ZM19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.83 2.83-.06-.06a1.7 1.7 0 0 0-1.88-.34 1.7 1.7 0 0 0-1.03 1.56V21h-4v-.08A1.7 1.7 0 0 0 8.95 19.4a1.7 1.7 0 0 0-1.88.34l-.06.06-2.83-2.83.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-1.56-1.03H3v-4h.08A1.7 1.7 0 0 0 4.6 8.95a1.7 1.7 0 0 0-.34-1.88l-.06-.06 2.83-2.83.06.06A1.7 1.7 0 0 0 8.95 4.6 1.7 1.7 0 0 0 9.98 3H14v.08a1.7 1.7 0 0 0 1.03 1.56 1.7 1.7 0 0 0 1.88-.34l.06-.06 2.83 2.83-.06.06a1.7 1.7 0 0 0-.34 1.88 1.7 1.7 0 0 0 1.56 1.03H21v4h-.08A1.7 1.7 0 0 0 19.4 15Z"/></svg>
+          <span>Settings</span>
+        </button>
+      </nav>
+
+      <div class="sidebar-spacer"></div>
+      <div class="sync-card" id="syncCard" role="button" tabindex="0" title="Open packet log">
+        <svg class="sync-icon" viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M22 12h-4l-3 7L9 5l-3 7H2"/>
+        </svg>
+        <div class="sync-copy">
+          <div class="sync-row"><span class="status-light"></span><span>LIVE SYNC</span><b>Connected</b></div>
+          <div class="sync-progress"><i></i></div>
+          <p>Last packet <span id="lastPacket">2s ago</span></p>
+        </div>
+      </div>
+      <div class="profile-dock" id="profileDock">
+        <div class="profile-sheet" id="profileSheet">
+          <div class="profile-panel" id="profilePanel"></div>
+        </div>
+        <div class="profile-card">
+          <button type="button" class="profile" id="profileBtn" aria-expanded="false" aria-controls="profileSheet">
+            <span class="avatar-wrap">
+              <div class="avatar" id="profileAvatar"><span id="profileAvatarInitials">—</span></div>
+            </span>
+            <div class="profile-meta">
+              <strong id="profilePersona">Loading…</strong>
+              <span id="profileProtection">Protection</span>
+            </div>
+            <svg class="profile-chevron" viewBox="0 0 24 24"><path d="m8 10 4 4 4-4"/></svg>
+          </button>
+          <div class="profile-notices" id="profileNotices">
+            <button type="button" class="profile-notice" data-forum="conversations" title="Unread conversations">
+              <span>DMs</span><b id="noticeConversations">0</b>
+            </button>
+            <button type="button" class="profile-notice" data-forum="alerts" title="Unread alerts">
+              <span>Alerts</span><b id="noticeAlerts">0</b>
+            </button>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow" id="pageEyebrow">PERFORMANCE OVERVIEW</p>
+          <h1 id="pageTitle">Overall Stats</h1>
+        </div>
+        <div class="top-actions">
+          <div class="top-filters">
+            <div class="range-control" id="modeControl">
+              <button type="button" data-mode="untagged" class="active">UNTAGGED</button>
+              <button type="button" data-mode="prem_comp" class="active">PREM/COMP</button>
+              <button type="button" data-mode="practice" class="active">PRACTICE</button>
+              <button type="button" data-mode="casual" class="active">CASUAL</button>
+              <button type="button" data-mode="deathmatch" class="active">DM</button>
+            </div>
+            <div class="range-control" id="rangeControl">
+              <button data-range="7">7D</button>
+              <button data-range="30" class="active">30D</button>
+              <button data-range="all">ALL</button>
+            </div>
+          </div>
+          <button class="icon-btn" title="Refresh" id="refreshBtn">
+            <svg viewBox="0 0 24 24"><path d="M20 11a8 8 0 1 0-2.34 5.66L20 19v-6h-6l2.25 2.25A6 6 0 1 1 18 11h2Z"/></svg>
+          </button>
+          <button class="export-btn" id="exportBtn">
+            <svg viewBox="0 0 24 24"><path d="M11 3h2v10l3.5-3.5 1.4 1.4-5.9 5.9-5.9-5.9 1.4-1.4L11 13V3ZM5 19h14v2H5v-2Z"/></svg>
+            Export
+          </button>
+        </div>
+      </header>
+
+      <section id="overall" class="tab-panel active">
+        <div id="rankKpis" class="kpi-grid ranks-grid"></div>
+        <div id="overallKpis" class="kpi-grid"></div>
+        <div class="dashboard-grid">
+          <article class="card span-7 chart-card">
+            <div class="card-head">
+              <div><p class="card-kicker">ACQUISITION SPEED</p><h2>Reaction Time</h2></div>
+              <div class="metric-inline"><strong id="reactionCurrent">—</strong><span>avg ms</span></div>
+            </div>
+            <div class="chart-wrap tall"><canvas id="reactionChart"></canvas></div>
+          </article>
+
+          <article class="card span-5">
+            <div class="card-head">
+              <div><p class="card-kicker">AIM DISCIPLINE</p><h2>Counter-Strafe</h2></div>
+              <span class="trend" id="counterTrend">—</span>
+            </div>
+            <div class="gauge-layout">
+              <div class="gauge" id="counterGauge">
+                <svg viewBox="0 0 120 120" aria-hidden="true">
+                  <defs>
+                    <linearGradient id="gaugeGrad" gradientUnits="userSpaceOnUse" x1="18" y1="18" x2="102" y2="102">
+                      <stop offset="0%" stop-color="var(--gradient-from, var(--accent))" />
+                      <stop offset="100%" stop-color="var(--gradient-to, var(--accent-2))" />
+                    </linearGradient>
+                  </defs>
+                  <circle class="gauge-track" cx="60" cy="60" r="52"></circle>
+                  <circle class="gauge-arc" cx="60" cy="60" r="52"></circle>
+                </svg>
+                <div><strong>—</strong><span>PERFECT</span></div>
+              </div>
+              <div class="gauge-stats">
+                <div><span>Accurate shots</span><strong id="perfectShots">—</strong></div>
+                <div><span>Average velocity</span><strong id="avgVelocity">—</strong></div>
+                <div><span>Moving shots</span><strong id="movingShots">—</strong></div>
+              </div>
+            </div>
+          </article>
+
+          <article class="card span-7">
+            <div class="card-head">
+              <div><p class="card-kicker">ENDPOINT DISTRIBUTION</p><h2>Flick Accuracy</h2></div>
+              <div class="legend">
+                <span class="under">Under</span>
+                <span class="target">On target</span>
+                <span class="over">Over</span>
+                <span class="info-tip" title="Each dot is one opening flick, not a scoreboard kill. Pre-aimed shots (they walked into your crosshair) are left off. Graph is limited to the last 100 flicks. Side totals still count every flick in the 7 / 30 / all range. Dots far outside this window are counted but not drawn.">i</span>
+              </div>
+            </div>
+            <div class="scatter-layout">
+              <div class="chart-wrap scatter"><canvas id="flickScatter"></canvas></div>
+              <div id="flickSummary" class="scatter-summary"></div>
+            </div>
+            <p class="scatter-note" id="flickGraphNote">Graph is limited to the last 100 flicks. Dots outside this window are not drawn. Side totals still count every flick.</p>
+          </article>
+
+          <article class="card span-5 radar-card">
+            <div class="card-head">
+              <div><p class="card-kicker">FIRST CONTACT</p><h2>Crosshair Placement</h2></div>
+              <span class="info-tip" title="Each dot is your crosshair versus their head at first peek. Center is on-head. Left/right is yaw, high/low is pitch. Head-level is pitch only: height was already at their head even if yaw was still off. Graph shows the newest 100 peeks. Dots outside this window are not drawn.">i</span>
+            </div>
+            <div class="radar-zone">
+              <canvas id="placementRadar"></canvas>
+            </div>
+            <div class="placement-stats">
+              <div><span>Avg offset</span><strong id="placementOffset">—</strong></div>
+              <div><span>Head-level</span><strong id="headLevel">—</strong></div>
+              <div><span>Pre-aimed</span><strong id="preAimed">—</strong></div>
+            </div>
+            <p class="scatter-note" id="placementGraphNote">Graph shows the newest 100 peeks. Dots outside this window are not drawn.</p>
+          </article>
+
+        </div>
+      </section>
+
+      <section id="last-match" class="tab-panel">
+        <div class="match-hero" id="lastMatchHero"></div>
+        <div id="matchKpis" class="kpi-grid compact"></div>
+        <article class="card span-12 scoreboard-card">
+          <div class="card-head">
+            <div>
+              <p class="card-kicker">MATCH BOARD</p>
+              <h2>Scoreboard</h2>
+            </div>
+            <div class="sb-head-actions">
+              <span class="subtle" id="scoreboardMeta">Your team on top · live with the score</span>
+              <div class="sb-view-toggle" id="scoreboardView">
+                <button type="button" id="sbViewPrev" aria-label="Previous board">‹</button>
+                <strong id="sbViewLabel">Match</strong>
+                <button type="button" id="sbViewNext" aria-label="Next board">›</button>
+              </div>
+            </div>
+          </div>
+          <div id="matchScoreboard" class="scoreboard"></div>
+        </article>
+        <div class="dashboard-grid">
+          <article class="card span-8">
+            <div class="card-head"><div><p class="card-kicker">ENGAGEMENT TIMELINE</p><h2>Fight-by-Fight Reaction</h2></div><span class="subtle">Visible time only</span></div>
+            <div class="chart-wrap tall"><canvas id="matchReactionChart"></canvas></div>
+          </article>
+          <article class="card span-4">
+            <div class="card-head"><div><p class="card-kicker">ROUND BALANCE</p><h2>CT vs T</h2></div></div>
+            <div id="sideSplit" class="side-split"></div>
+          </article>
+          <article class="card span-12 location-card">
+            <div class="card-head">
+              <div><p class="card-kicker">POSITIONAL OUTCOMES</p><h2>Kill / Death Location Heatmap</h2></div>
+              <div class="heatmap-filters">
+                <div class="segmented" id="locationMode">
+                  <button class="active" data-mode="all">All</button>
+                  <button data-mode="kills">Kills</button>
+                  <button data-mode="deaths">Deaths</button>
+                </div>
+              </div>
+            </div>
+            <div class="location-layout">
+              <div class="map-canvas-shell">
+                <img id="radarImage" alt="CS2 tactical radar">
+                <canvas id="locationHeatmap" width="800" height="800"></canvas>
+                <div class="location-legend"><span class="kill-dot"></span>Kills <span class="death-dot"></span>Deaths</div>
+                <div class="round-stepper" id="heatmapRoundControl">
+                  <button type="button" id="heatmapRoundPrev" aria-label="Previous round">‹</button>
+                  <strong id="heatmapRoundLabel">All rounds</strong>
+                  <button type="button" id="heatmapRoundNext" aria-label="Next round">›</button>
+                </div>
+                <div class="repo-credit">Radar by MurkyYT/cs2-map-icons</div>
+              </div>
+              <aside class="location-insights" id="locationInsights"></aside>
+            </div>
+          </article>
+          <article class="card span-12">
+            <div class="card-head"><div><p class="card-kicker">DETAILED LOG</p><h2>Engagements</h2></div><button class="text-btn">View raw data</button></div>
+            <div class="table-wrap"><table><thead><tr><th>#</th><th>Result</th><th>Round</th><th>Weapon</th><th>Pre-aim</th><th>Flick</th><th>Path</th><th>Landing</th><th>Reaction</th><th>TTK</th><th>1st shot</th><th>Velocity</th></tr></thead><tbody id="engagementRows"></tbody></table></div>
+          </article>
+        </div>
+      </section>
+
+      <section id="matches" class="tab-panel">
+        <div class="section-intro">
+          <div><p class="eyebrow">MATCH HISTORY</p><h2>Your last 20 matches</h2><p>Tag Prem/Comp, practice, casual, or deathmatch. Click a match for its aim profile.</p></div>
+          <div class="history-summary" id="historySummary"></div>
+        </div>
+        <div id="matchList" class="match-list"></div>
+      </section>
+
+      <section id="maps" class="tab-panel">
+        <div class="section-intro">
+          <div><p class="eyebrow">MAP BREAKDOWN</p><h2>Official maps</h2><p>Win rate, reaction, pre-aim, K/D, and your competitive rank on each map.</p></div>
+          <div class="section-side">
+            <div class="history-summary" id="mapSummary"></div>
+            <div class="section-analyze-row">
+              <button type="button" class="section-analyze section-analyze-toggle" id="mapLeakToggle" hidden>Show previous analysis</button>
+              <button type="button" class="settings-save section-analyze" id="mapAnalyze">Analyze</button>
+            </div>
+          </div>
+        </div>
+        <article class="leak-panel" id="mapLeakPanel" hidden></article>
+        <div id="mapGrid" class="map-grid"></div>
+      </section>
+
+      <section id="weapons" class="tab-panel">
+        <div class="section-intro">
+          <div><p class="eyebrow">LOADOUT BREAKDOWN</p><h2>Weapons</h2><p>Sorted by fights. Click a gun for its full aim profile.</p></div>
+          <div class="section-side">
+            <div class="history-summary" id="weaponSummary"></div>
+            <div class="section-analyze-row">
+              <button type="button" class="section-analyze section-analyze-toggle" id="weaponLeakToggle" hidden>Show previous analysis</button>
+              <button type="button" class="settings-save section-analyze" id="weaponAnalyze">Analyze</button>
+            </div>
+          </div>
+        </div>
+        <article class="leak-panel" id="weaponLeakPanel" hidden></article>
+        <div id="weaponList" class="match-list"></div>
+      </section>
+
+      <section id="sensitivity" class="tab-panel">
+        <div class="sens-layout">
+          <article class="card sens-setup">
+            <div class="card-head">
+              <div>
+                <p class="card-kicker">YOUR SETUP</p>
+                <h2>Sensitivity & sample</h2>
+              </div>
+            </div>
+            <label class="sens-field">
+              <span><strong>In-game sensitivity</strong><small>Your CS2 mouse sensitivity</small></span>
+              <input id="sensValue" type="number" min="0.001" max="20" step="any" value="1">
+            </label>
+            <label class="sens-field">
+              <span><strong>DPI</strong><small>Mouse DPI, not Windows pointer speed</small></span>
+              <input id="sensDpi" type="number" min="100" max="20000" step="50" value="800">
+            </label>
+            <label class="sens-field">
+              <span><strong>Games to send</strong><small>How many recent matches Gemini reads</small></span>
+              <input id="sensGames" type="number" min="1" max="20" step="1" value="8">
+            </label>
+            <div class="sens-field sens-modes">
+              <span><strong>Match types</strong><small>Gemini only reads these tagged games. Prem/Comp is the most trustworthy.</small></span>
+              <div class="sens-mode-picks" id="sensModePicks"></div>
+            </div>
+            <p class="sens-note" id="sensSampleNote">More games give a more reliable read. A couple of matches will guess.</p>
+            <div class="sens-metrics">
+              <div><span>eDPI</span><strong id="sensEdpi">—</strong></div>
+              <div><span>cm/360</span><strong id="sensCm360">—</strong></div>
+            </div>
+            <p class="sens-privacy">Uses your Gemini key from Settings. Only anonymized fight stats are sent — no names or Steam IDs.</p>
+            <button type="button" class="settings-save" id="sensAnalyze">Analyze aim</button>
+          </article>
+          <article class="card sens-output" id="sensOutput"></article>
+        </div>
+      </section>
+
+      <section id="loot" class="tab-panel">
+        <div class="loot-layout">
+          <article class="loot-status">
+            <div class="loot-status-head">
+              <div class="loot-status-copy">
+                <p class="eyebrow">ABUNDANCE OF JUPITER</p>
+                <div class="loot-badge cooldown" id="lootReadyBadge">Checking loot…</div>
+              </div>
+              <label class="setting-toggle loot-sim-toggle">
+                <span><strong>Simulate roll</strong><small>Preview a prize without consuming it</small></span>
+                <input type="checkbox" data-setting="simulateLoot"><i></i>
+              </label>
+            </div>
+            <div class="loot-times">
+              <div><span>Last roll</span><strong id="lootLastRoll">—</strong></div>
+              <div><span>Next roll</span><strong id="lootNextRoll">—</strong></div>
+            </div>
+          </article>
+
+          <article class="loot-stage" id="lootStage">
+            <div class="loot-crate" id="lootCrate">
+              <div class="crate-lid"><i></i></div>
+              <div class="crate-body"><span></span></div>
+            </div>
+            <div class="loot-case">
+              <div class="loot-marker"></div>
+              <div class="loot-window">
+                <div class="loot-track" id="lootTrack"></div>
+              </div>
+            </div>
+            <button type="button" class="loot-roll-btn" id="rollLootBtn" disabled>Roll loot</button>
+            <p class="loot-result" id="lootResult">Open a crate when loot is ready, or turn on Simulate roll to preview.</p>
+          </article>
+
+          <article class="loot-history" id="lootHistory">
+            <div class="loot-history-head">
+              <p class="eyebrow">ROLL HISTORY</p>
+              <span id="lootHistoryCount">0 rolls</span>
+            </div>
+            <div class="loot-history-list" id="lootHistoryList">
+              <p class="loot-history-empty">No rolls yet. Open a crate to start a history.</p>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section id="inventory" class="tab-panel">
+        <div class="section-intro">
+          <div>
+            <p class="eyebrow">STEAM CS2</p>
+            <h2>Inventory</h2>
+            <p>Pulled from Steam with the Steam ID on your Constelia account. Inventory must be public. Estimates are the lowest CSFloat buy-now listing for that item and wear — not rare floats, patterns, stickers, or charms.</p>
+          </div>
+          <div class="section-side">
+            <div class="history-summary" id="invSummary"></div>
+            <div class="section-analyze-row">
+              <button type="button" class="settings-save section-analyze" id="invRefresh">Refresh</button>
+            </div>
+          </div>
+        </div>
+        <article class="card inv-value-card">
+          <div class="card-head">
+            <div><p class="card-kicker">CSFLOAT</p><h2>Estimated value</h2></div>
+            <div class="metric-inline">
+              <strong id="invValueNow">—</strong>
+              <span id="invValueDelta" class="trend" hidden></span>
+            </div>
+          </div>
+          <div class="chart-wrap inv-value-chart"><canvas id="invValueChart"></canvas></div>
+          <p class="inv-price-note">Lowest buy-now price for the same wear. Rare patterns, floats, applied stickers, and charms are not included.</p>
+        </article>
+        <div class="inv-toolbar">
+          <input id="invSearch" type="search" placeholder="Search skins, weapons, stickers…" autocomplete="off">
+          <div class="inv-toolbar-end">
+            <div class="inv-sort">
+              <span>Sort</span>
+              <select id="invSort">
+                <option value="newest" selected>Newest</option>
+                <option value="rarity">Rarity</option>
+                <option value="price">Price</option>
+                <option value="name">Name A–Z</option>
+                <option value="name-desc">Name Z–A</option>
+                <option value="type">Type</option>
+              </select>
+            </div>
+            <div class="range-control" id="invFilter">
+              <button type="button" data-inv="all" class="active">ALL</button>
+              <button type="button" data-inv="weapons">WEAPONS</button>
+              <button type="button" data-inv="knives">KNIVES</button>
+              <button type="button" data-inv="gloves">GLOVES</button>
+              <button type="button" data-inv="agents">AGENTS</button>
+              <button type="button" data-inv="stickers">STICKERS</button>
+              <button type="button" data-inv="cases">CASES</button>
+              <button type="button" data-inv="other">OTHER</button>
+            </div>
+          </div>
+        </div>
+        <p class="inv-status" id="invStatus">Inventory loads from Steam when the dash opens if you have not saved one yet.</p>
+        <div id="invGrid" class="inv-grid"></div>
+      </section>
+
+      <section id="config" class="tab-panel">
+        <article class="config-protect">
+          <div>
+            <strong>Protection</strong>
+            <small>FC2 solution level for this Constelia account</small>
+          </div>
+          <select id="protectionSelect" disabled>
+            <option value="0">Standard (usermode)</option>
+            <option value="1">IPC/Zombie</option>
+            <option value="2">Kernel Mode Protection</option>
+            <option value="3">Minimum (Usermode)</option>
+            <option value="4">Minimum (Kernel)</option>
+            <option value="5">Rootlink</option>
+          </select>
+        </article>
+        <label class="setting-toggle config-autosave">
+          <span>Auto save</span>
+          <input type="checkbox" data-setting="scriptAutoSave"><i></i>
+        </label>
+        <div class="config-toolbar">
+          <div class="segmented" id="configMode">
+            <button type="button" class="active" data-config-tab="scripts">Enabled Scripts</button>
+            <button type="button" data-config-tab="libs">Enabled Libraries</button>
+            <button type="button" data-config-tab="cloud">Cloud</button>
+            <button type="button" data-config-tab="hidden" id="configHiddenTab" hidden>Hidden</button>
+          </div>
+          <p class="config-meta" id="configMeta">Loading configuration…</p>
+        </div>
+        <div class="config-sub active" data-config-panel="scripts" id="configScripts"></div>
+        <div class="config-sub" data-config-panel="libs" id="configLibs"></div>
+        <div class="config-sub" data-config-panel="cloud" id="configCloud">
+          <div class="config-cloud-bar">
+            <input id="cloudSearch" type="search" placeholder="Search by name, id, author, or category" autocomplete="off">
+            <div class="config-cloud-mid">
+              <select id="cloudCategory">
+                <option value="">All categories</option>
+              </select>
+              <label class="setting-toggle config-cloud-sort config-cloud-libs" title="Hide dependency and library scripts in the popularity list">
+                <span>Hide libraries</span>
+                <input type="checkbox" data-setting="cloudHideLibraries" aria-label="Hide libraries and dependencies"><i></i>
+              </label>
+            </div>
+            <label class="setting-toggle config-cloud-sort" title="Hide categories and sort every script by how many people use it">
+              <span>Popularity</span>
+              <input type="checkbox" data-setting="cloudSortPopular" aria-label="Sort cloud scripts by popularity"><i></i>
+            </label>
+          </div>
+          <div id="configCloudList"></div>
+        </div>
+        <div class="config-sub" data-config-panel="hidden" id="configHidden"></div>
+      </section>
+
+      <section id="logs" class="tab-panel">
+        <div class="logs-toolbar">
+          <div>
+            <p class="eyebrow">OMEGA PROCESS</p>
+            <h2>Live session</h2>
+            <p id="logsPath">Looking for last_session log…</p>
+          </div>
+          <div class="logs-tools">
+            <input id="logsFilter" type="search" placeholder="Filter lines" autocomplete="off">
+            <button type="button" class="reset-btn" id="logsFollow" aria-pressed="true">Follow</button>
+            <button type="button" class="reset-btn" id="logsClear">Clear</button>
+            <button type="button" class="reset-btn logs-cog" id="logsSettings" title="Log settings" aria-label="Log settings">
+              <svg viewBox="0 0 24 24"><path d="M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7ZM19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.83 2.83-.06-.06a1.7 1.7 0 0 0-1.88-.34 1.7 1.7 0 0 0-1.03 1.56V21h-4v-.08A1.7 1.7 0 0 0 8.95 19.4a1.7 1.7 0 0 0-1.88.34l-.06.06-2.83-2.83.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-1.56-1.03H3v-4h.08A1.7 1.7 0 0 0 4.6 8.95a1.7 1.7 0 0 0-.34-1.88l-.06-.06 2.83-2.83.06.06A1.7 1.7 0 0 0 8.95 4.6 1.7 1.7 0 0 0 9.98 3H14v.08a1.7 1.7 0 0 0 1.03 1.56 1.7 1.7 0 0 0 1.88-.34l.06-.06 2.83 2.83-.06.06a1.7 1.7 0 0 0-.34 1.88 1.7 1.7 0 0 0 1.56 1.03H21v4h-.08A1.7 1.7 0 0 0 19.4 15Z"/></svg>
+            </button>
+            <span class="logs-live" id="logsLive" hidden><i></i>LIVE</span>
+          </div>
+        </div>
+        <div class="logs-view" id="logsView" tabindex="0"></div>
+      </section>
+
+      <section id="settings" class="tab-panel">
+        <div class="settings-heading">
+          <div><p class="eyebrow">PERSONALIZE OMEGADASH</p><h2>Settings</h2><p>Configure appearance, APIs, and desktop behavior.</p></div>
+          <button class="reset-btn" id="resetSettings">Reset defaults</button>
+        </div>
+
+        <div class="settings-grid">
+          <article class="settings-card theme-card-wide">
+            <div class="settings-card-head"><div><span class="settings-icon">✦</span><div><h3>Appearance</h3><p>Choose a visual theme. Changes apply instantly.</p></div></div></div>
+            <div class="theme-group">
+              <p class="theme-group-label">Static</p>
+              <div class="theme-picker">
+                <button class="theme-option" data-theme="omega">
+                  <span class="theme-preview omega-preview"><i></i><b></b></span>
+                  <strong>Omega</strong><small>Signature green</small><em>✓</em>
+                </button>
+                <button class="theme-option" data-theme="neon">
+                  <span class="theme-preview neon-preview"><i></i><b></b></span>
+                  <strong>Neon</strong><small>Cyber magenta</small><em>✓</em>
+                </button>
+                <button class="theme-option" data-theme="aurora">
+                  <span class="theme-preview aurora-preview"><i></i><b></b></span>
+                  <strong>Aurora</strong><small>Blue-violet gradient</small><em>✓</em>
+                </button>
+                <button class="theme-option" data-theme="ember">
+                  <span class="theme-preview ember-preview"><i></i><b></b></span>
+                  <strong>Ember</strong><small>Warm sunset</small><em>✓</em>
+                </button>
+                <button class="theme-option" data-theme="violet">
+                  <span class="theme-preview violet-preview"><i></i><b></b></span>
+                  <strong>Violet</strong><small>Royal purple</small><em>✓</em>
+                </button>
+                <div class="theme-option-wrap">
+                  <button type="button" class="theme-option" data-theme="custom" id="customStaticTheme">
+                    <span class="theme-preview custom-preview" id="customStaticPreview"><i></i><b></b></span>
+                    <strong id="customStaticName">Custom</strong><small>Your colors</small><em>✓</em>
+                  </button>
+                  <button type="button" class="theme-edit" data-edit-theme="custom" title="Edit theme" aria-label="Edit custom theme">
+                    <svg viewBox="0 0 24 24"><path d="M4 20h4.5L19 9.5l-4.5-4.5L4 15.5V20Z"/><path d="M13.5 6 17 9.5"/></svg>
+                  </button>
+                </div>
+              </div>
+            </div>
+            <label class="setting-toggle" id="staticGradientRow">
+              <span><strong>Accent gradients</strong><small>Fill buttons, bars, and charts with the theme gradient</small></span>
+              <input type="checkbox" data-setting="staticGradients"><i></i>
+            </label>
+            <div class="theme-group">
+              <p class="theme-group-label">Animated</p>
+              <div class="theme-picker">
+                <button class="theme-option" data-theme="prism">
+                  <span class="theme-preview prism-preview"><i></i><b></b></span>
+                  <strong>Prism</strong><small>Purple to blue</small><em>✓</em>
+                </button>
+                <button class="theme-option" data-theme="spectrum">
+                  <span class="theme-preview spectrum-preview"><i></i><b></b></span>
+                  <strong>Spectrum</strong><small>Full RGB cycle</small><em>✓</em>
+                </button>
+                <button class="theme-option" data-theme="magma">
+                  <span class="theme-preview magma-preview"><i></i><b></b></span>
+                  <strong>Magma</strong><small>Lava pulse</small><em>✓</em>
+                </button>
+                <button class="theme-option" data-theme="tide">
+                  <span class="theme-preview tide-preview"><i></i><b></b></span>
+                  <strong>Tide</strong><small>Ocean shift</small><em>✓</em>
+                </button>
+                <button class="theme-option" data-theme="voltage">
+                  <span class="theme-preview voltage-preview"><i></i><b></b></span>
+                  <strong>Voltage</strong><small>Electric surge</small><em>✓</em>
+                </button>
+                <div class="theme-option-wrap">
+                  <button type="button" class="theme-option" data-theme="custom-anim" id="customAnimTheme">
+                    <span class="theme-preview custom-anim-preview" id="customAnimPreview"><i></i><b></b></span>
+                    <strong id="customAnimName">Custom</strong><small>Your animation</small><em>✓</em>
+                  </button>
+                  <button type="button" class="theme-edit" data-edit-theme="custom-anim" title="Edit theme" aria-label="Edit custom animated theme">
+                    <svg viewBox="0 0 24 24"><path d="M4 20h4.5L19 9.5l-4.5-4.5L4 15.5V20Z"/><path d="M13.5 6 17 9.5"/></svg>
+                  </button>
+                </div>
+              </div>
+            </div>
+            <label class="setting-row" id="themeSpeedRow">
+              <span><strong>Animation speed</strong><small>How fast animated themes shift color</small></span>
+              <output id="themeSpeedValue">1.0×</output>
+              <input id="themeSpeed" type="range" min="1" max="10" step="1" value="5">
+            </label>
+          </article>
+
+          <article class="settings-card theme-card-wide">
+            <div class="settings-card-head"><div><span class="settings-icon">⌥</span><div><h3>API Keys</h3><p>Keys stay on this PC. You have to paste each key here — the app does not read license.dat.</p></div></div></div>
+            <div class="api-key-row" data-api="constelia">
+              <div class="api-key-copy">
+                <strong>Constelia</strong>
+                <small>Required for profile, loot, and forum. Paste the entire key.</small>
+              </div>
+              <span class="api-status missing" id="consteliaStatus">Missing</span>
+              <div class="api-key-controls">
+                <input id="consteliaKey" type="password" autocomplete="off" spellcheck="false" placeholder="Paste Constelia API key">
+                <button type="button" class="api-icon-btn" data-toggle-key="consteliaKey">Show</button>
+                <button type="button" class="api-icon-btn" data-clear-key="consteliaKey">Clear</button>
+              </div>
+            </div>
+            <div class="api-key-row" data-api="leetify">
+              <div class="api-key-copy">
+                <strong>Leetify</strong>
+                <small>Public CS API key from <a href="https://leetify.com/app/developer" target="_blank" rel="noreferrer">leetify.com/app/developer</a>.</small>
+              </div>
+              <span class="api-status missing" id="leetifyStatus">Missing</span>
+              <div class="api-key-controls">
+                <input id="leetifyKey" type="password" autocomplete="off" spellcheck="false" placeholder="Paste Leetify API key">
+                <button type="button" class="api-icon-btn" data-toggle-key="leetifyKey">Show</button>
+                <button type="button" class="api-icon-btn" data-clear-key="leetifyKey">Clear</button>
+              </div>
+            </div>
+            <div class="api-key-row" data-api="gemini">
+              <div class="api-key-copy">
+                <strong>Gemini</strong>
+                <small>Google AI Studio key from <a href="https://aistudio.google.com/apikey" target="_blank" rel="noreferrer">aistudio.google.com/apikey</a>.</small>
+              </div>
+              <span class="api-status missing" id="geminiStatus">Missing</span>
+              <div class="api-key-controls">
+                <input id="geminiKey" type="password" autocomplete="off" spellcheck="false" placeholder="Paste Gemini API key">
+                <button type="button" class="api-icon-btn" data-toggle-key="geminiKey">Show</button>
+                <button type="button" class="api-icon-btn" data-clear-key="geminiKey">Clear</button>
+              </div>
+            </div>
+            <div class="api-key-row" data-api="csfloat">
+              <div class="api-key-copy">
+                <strong>CSFloat</strong>
+                <small>Developer key from your <a href="https://csfloat.com/profile" target="_blank" rel="noreferrer">CSFloat profile</a> (Developer tab). Used for estimated inventory prices.</small>
+              </div>
+              <span class="api-status missing" id="csfloatStatus">Missing</span>
+              <div class="api-key-controls">
+                <input id="csfloatKey" type="password" autocomplete="off" spellcheck="false" placeholder="Paste CSFloat API key">
+                <button type="button" class="api-icon-btn" data-toggle-key="csfloatKey">Show</button>
+                <button type="button" class="api-icon-btn" data-clear-key="csfloatKey">Clear</button>
+              </div>
+            </div>
+            <div class="api-key-actions">
+              <p class="api-key-note" id="apiKeyNote">Leave a field blank to keep the saved key.</p>
+              <button type="button" class="settings-save" id="saveApiKeys">Save keys</button>
+            </div>
+          </article>
+
+          <article class="settings-card theme-card-wide">
+            <div class="settings-card-head"><div><span class="settings-icon">⌘</span><div><h3>Desktop & Data</h3><p>Native app and sync preferences.</p></div></div></div>
+            <label class="setting-toggle"><span><strong>Fullscreen maximize</strong><small>Cover the taskbar when the window is maximized</small></span><input type="checkbox" checked data-setting="fullscreenMaximize"><i></i></label>
+            <label class="setting-toggle"><span><strong>Live telemetry sync</strong><small>Accept incoming Lua packets</small></span><input type="checkbox" checked data-setting="liveSync"><i></i></label>
+            <label class="setting-toggle"><span><strong>Restart Omega on rootlink stall</strong><small>If rootlink stays pending and the log dies on no supported title, close Omega and start earthbound again</small></span><input type="checkbox" checked data-setting="omegaRestartOnStall"><i></i></label>
+            <label class="setting-toggle"><span><strong>Compact navigation</strong><small>Collapse the sidebar to icons</small></span><input type="checkbox" data-setting="compactNav"><i></i></label>
+            <label class="setting-toggle"><span><strong>Reduce motion</strong><small>Disable interface animations</small></span><input type="checkbox" data-setting="reduceMotion"><i></i></label>
+            <div class="danger-row">
+              <span><strong>Reset telemetry</strong><small>Delete every saved match and start fresh</small></span>
+              <button type="button" class="danger-btn" id="clearTelemetry">Delete all data</button>
+            </div>
+          </article>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <div id="toast" class="toast"><span>✓</span><p>Telemetry exported successfully</p></div>
+  <div id="practiceGuide" class="guide-overlay" hidden>
+    <div class="guide-panel" role="dialog" aria-modal="true" aria-labelledby="guideTitle">
+      <header class="guide-bar">
+        <button type="button" class="guide-back" id="guideBack">
+          <svg viewBox="0 0 24 24"><path d="M15 6 9 12l6 6"/></svg>
+          Back
+        </button>
+        <h2 id="guideTitle">Practice guide</h2>
+        <button type="button" class="guide-x" id="guideClose" aria-label="Close">
+          <svg viewBox="0 0 12 12"><path d="M3 3l6 6M9 3l-6 6"/></svg>
+        </button>
+      </header>
+      <div class="guide-body" id="guideBody"></div>
+    </div>
+  </div>
+  <div id="scriptEditor" class="guide-overlay script-editor" hidden>
+    <div class="guide-panel" role="dialog" aria-modal="true" aria-labelledby="scriptEditorTitle">
+      <header class="guide-bar">
+        <button type="button" class="guide-back" id="scriptEditorBack">
+          <svg viewBox="0 0 24 24"><path d="M15 6 9 12l6 6"/></svg>
+          Back
+        </button>
+        <h2 id="scriptEditorTitle">Edit script</h2>
+        <button type="button" class="guide-x" id="scriptEditorClose" aria-label="Close">
+          <svg viewBox="0 0 12 12"><path d="M3 3l6 6M9 3l-6 6"/></svg>
+        </button>
+      </header>
+      <div class="guide-body" id="scriptEditorBody"></div>
+      <footer class="script-edit-bar">
+        <p class="script-edit-note">Reset restores the first saved copy and pushes it to Omega.</p>
+        <button type="button" class="reset-btn" id="scriptEditorReset">Reset</button>
+        <button type="button" class="settings-save" id="scriptEditorSave">Save</button>
+      </footer>
+    </div>
+  </div>
+  <div id="themeEditor" class="confirm-overlay log-set-overlay" hidden>
+    <div class="confirm-card log-set-card theme-edit-card" role="dialog" aria-modal="true" aria-labelledby="themeEditTitle">
+      <div class="confirm-head">
+        <span class="confirm-icon log-set-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24"><path d="M4 20h4.5L19 9.5l-4.5-4.5L4 15.5V20Z"/><path d="M13.5 6 17 9.5"/></svg>
+        </span>
+        <div>
+          <p class="eyebrow">APPEARANCE</p>
+          <h3 id="themeEditTitle">Edit theme</h3>
+        </div>
+        <button type="button" class="reset-btn log-set-close" id="themeEditorClose">Close</button>
+      </div>
+      <label class="theme-edit-name">
+        <span>Name</span>
+        <input id="themeEditName" type="text" maxlength="18" autocomplete="off" spellcheck="false">
+      </label>
+      <p class="eyebrow theme-edit-colors-label">COLORS</p>
+      <div class="theme-edit-colors" id="themeEditColors">
+        <label class="theme-edit-color"><span>Primary</span><input type="color" class="log-color" data-theme-color="accent"></label>
+        <label class="theme-edit-color"><span>Secondary</span><input type="color" class="log-color" data-theme-color="accent2"></label>
+      </div>
+      <div id="themeEditGradientBlock">
+        <p class="log-set-hint" id="themeEditHint">Mix is where the colors meet. Fade is how soft that edge is. Angle rotates the gradient.</p>
+        <label class="theme-edit-slider">
+          <span>Mix <output id="themeEditGradientValue">50%</output></span>
+          <input id="themeEditGradient" type="range" min="0" max="100" step="1" value="50">
+        </label>
+        <label class="theme-edit-slider">
+          <span>Fade <output id="themeEditFadeValue">80%</output></span>
+          <input id="themeEditFade" type="range" min="0" max="100" step="1" value="80">
+        </label>
+        <label class="theme-edit-slider">
+          <span>Angle <output id="themeEditAngleValue">135°</output></span>
+          <input id="themeEditAngle" type="range" min="0" max="360" step="1" value="135">
+        </label>
+        <div class="theme-edit-grad-preview" id="themeEditGradPreview"></div>
+      </div>
+      <div class="theme-edit-anim" id="themeEditAnimRow" hidden>
+        <p class="eyebrow">MOTION</p>
+        <div class="segmented" id="themeEditAnimMode">
+          <button type="button" data-anim-mode="rgb" class="active">RGB cycle</button>
+          <button type="button" data-anim-mode="fade">Fade</button>
+        </div>
+        <p class="log-set-hint">RGB cycle walks the hues between the two colors, then back. Fade pulses one color, then the other.</p>
+      </div>
+    </div>
+  </div>
+  <div id="logSettings" class="confirm-overlay log-set-overlay" hidden>
+    <div class="confirm-card log-set-card" role="dialog" aria-modal="true" aria-labelledby="logSetTitle">
+      <div class="confirm-head">
+        <span class="confirm-icon log-set-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24"><path d="M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7ZM19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.83 2.83-.06-.06a1.7 1.7 0 0 0-1.88-.34 1.7 1.7 0 0 0-1.03 1.56V21h-4v-.08A1.7 1.7 0 0 0 8.95 19.4a1.7 1.7 0 0 0-1.88.34l-.06.06-2.83-2.83.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-1.56-1.03H3v-4h.08A1.7 1.7 0 0 0 4.6 8.95a1.7 1.7 0 0 0-.34-1.88l-.06-.06 2.83-2.83.06.06A1.7 1.7 0 0 0 8.95 4.6 1.7 1.7 0 0 0 9.98 3H14v.08a1.7 1.7 0 0 0 1.03 1.56 1.7 1.7 0 0 0 1.88-.34l.06-.06 2.83 2.83-.06.06a1.7 1.7 0 0 0-.34 1.88 1.7 1.7 0 0 0 1.56 1.03H21v4h-.08A1.7 1.7 0 0 0 19.4 15Z"/></svg>
+        </span>
+        <div>
+          <p class="eyebrow">LOGS</p>
+          <h3 id="logSetTitle">Log settings</h3>
+        </div>
+        <button type="button" class="reset-btn log-set-close" id="logSettingsClose">Close</button>
+      </div>
+
+      <div class="log-set-range">
+        <div class="log-set-range-head">
+          <div>
+            <p class="eyebrow">TIME RANGE</p>
+            <h4>Session window</h4>
+          </div>
+          <button type="button" class="reset-btn is-on" id="logRangeAll">All</button>
+        </div>
+        <div class="logs-dual" id="logDual">
+          <div class="logs-dual-track"><div class="logs-dual-fill" id="logDualFill"></div></div>
+          <input type="range" id="logRangeStart" min="0" max="1" value="0" step="1" aria-label="Start time">
+          <input type="range" id="logRangeEnd" min="0" max="1" value="1" step="1" aria-label="End time">
+        </div>
+        <div class="logs-range-times">
+          <span id="logRangeStartLabel">—</span>
+          <span id="logRangeStatus">All</span>
+          <span id="logRangeEndLabel">—</span>
+        </div>
+      </div>
+
+      <div class="log-set-export">
+        <div class="log-set-scripts-head">
+          <div>
+            <p class="eyebrow">EXPORT</p>
+            <h4>Visible log</h4>
+          </div>
+        </div>
+        <p class="log-set-hint">Uses the current filter, time range, and hidden scripts. HTML keeps colors and highlight. TXT is plain text.</p>
+        <div class="log-set-export-actions">
+          <button type="button" class="reset-btn" id="logExportHtml">Export HTML</button>
+          <button type="button" class="reset-btn" id="logExportTxt">Export TXT</button>
+        </div>
+      </div>
+
+      <div class="log-set-scripts">
+        <div class="log-set-scripts-head">
+          <div>
+            <p class="eyebrow">SCRIPTS</p>
+          </div>
+          <button type="button" class="reset-btn" id="logScriptsReset">Reset</button>
+        </div>
+        <p class="log-set-hint">Color the [script-name] tag. Highlight dims every other script. Hide removes it from the log. Click a log, or click and drag across several, to highlight those blocks.</p>
+        <div class="log-script-list" id="logScriptList"></div>
+      </div>
+    </div>
+  </div>
+  <div id="packetLog" class="confirm-overlay log-set-overlay" hidden>
+    <div class="confirm-card log-set-card packet-log-card" role="dialog" aria-modal="true" aria-labelledby="packetLogTitle">
+      <div class="confirm-head">
+        <span class="confirm-icon log-set-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24"><path d="M4 5h16v4H4V5Zm0 7h16v4H4v-4Zm0 7h16v4H4v-4Z"/></svg>
+        </span>
+        <div>
+          <p class="eyebrow">LIVE SYNC</p>
+          <h3 id="packetLogTitle">Packet log</h3>
+        </div>
+        <button type="button" class="reset-btn log-set-close" id="packetLogClose">Close</button>
+      </div>
+      <div class="packet-log-toolbar">
+        <p class="packet-log-path" id="packetLogPath">Waiting for ingest…</p>
+        <div class="logs-tools">
+          <input id="packetLogFilter" type="search" placeholder="Filter packets" autocomplete="off">
+          <button type="button" class="reset-btn" id="packetLogFollow" aria-pressed="true">Follow</button>
+          <button type="button" class="reset-btn" id="packetLogClear">Clear</button>
+          <span class="logs-live" id="packetLogLive" hidden><i></i>LIVE</span>
+        </div>
+      </div>
+      <div class="logs-view packet-log-view" id="packetLogView" tabindex="0"></div>
+    </div>
+  </div>
+  <div id="changelogPopup" class="confirm-overlay log-set-overlay" hidden>
+    <div class="confirm-card log-set-card changelog-card" role="dialog" aria-modal="true" aria-labelledby="changelogTitle">
+      <div class="confirm-head">
+        <span class="confirm-icon log-set-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24"><path d="M7 4h10v2H7V4Zm-2 4h14v14H5V8Zm4 3v2h6v-2H9Zm0 4v2h6v-2H9Z"/></svg>
+        </span>
+        <div>
+          <p class="eyebrow">CHANGELOG</p>
+          <h3 id="changelogTitle">Changelog</h3>
+        </div>
+        <button type="button" class="reset-btn log-set-close" id="changelogClose">Close</button>
+      </div>
+      <div class="changelog-body" id="changelogBody"></div>
+    </div>
+  </div>
+  <div id="logLinePop" class="log-line-pop" hidden role="dialog" aria-label="Highlight this log">
+    <p class="eyebrow" id="logLinePopKicker">THIS LOG</p>
+    <p class="log-line-pop-src" id="logLinePopSrc"></p>
+    <p class="log-line-pop-hint" id="logLinePopHint">Applies to the whole block, including wrapped lines from the same print.</p>
+    <div class="log-line-pop-actions">
+      <label class="log-hl-toggle" title="Highlight this log block">
+        <input type="checkbox" id="logLineHlOn">
+        <i></i>
+        <em>Highlight</em>
+      </label>
+      <button type="button" class="reset-btn log-line-copy" id="logLineCopy" title="Copy (Ctrl+C)">Copy</button>
+    </div>
+    <div class="log-line-pop-colors" id="logLinePopColors">
+      <button type="button" class="log-line-swatch" data-log-line-color="#ff4d5a" title="Red" aria-label="Red"></button>
+      <button type="button" class="log-line-swatch" data-log-line-color="#3dd68c" title="Green" aria-label="Green"></button>
+      <button type="button" class="log-line-swatch" data-log-line-color="#ff9a3d" title="Orange" aria-label="Orange"></button>
+      <input type="color" class="log-color" id="logLineColorPick" value="#ff9a3d" title="Custom color" aria-label="Custom highlight color">
+    </div>
+  </div>
+  <div id="invItemModal" class="confirm-overlay log-set-overlay" hidden>
+    <div class="confirm-card log-set-card inv-item-card" role="dialog" aria-modal="true" aria-labelledby="invItemTitle">
+      <div class="confirm-head">
+        <span class="confirm-icon log-set-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24"><path d="M5 18h3l1-3h6l1 3h3l-2-12H7L5 18Zm7-9 1.2 3.6H10.8L12 9Z"/></svg>
+        </span>
+        <div>
+          <p class="eyebrow" id="invItemKicker">ITEM</p>
+          <h3 id="invItemTitle">Item</h3>
+        </div>
+        <button type="button" class="reset-btn log-set-close" id="invItemClose">Close</button>
+      </div>
+      <div class="inv-item-body" id="invItemBody"></div>
+    </div>
+  </div>
+  <div id="confirmModal" class="confirm-overlay" hidden>
+    <div class="confirm-card" role="dialog" aria-modal="true" aria-labelledby="confirmTitle" aria-describedby="confirmCopy">
+      <div class="confirm-head">
+        <span class="confirm-icon" aria-hidden="true">!</span>
+        <div>
+          <p class="eyebrow" id="confirmKicker">CONFIRM</p>
+          <h3 id="confirmTitle">Delete this match?</h3>
+        </div>
+      </div>
+      <p id="confirmCopy">This match will be removed from OmegaDash.</p>
+      <div class="confirm-actions">
+        <button type="button" class="reset-btn" id="confirmExtra" hidden>Continue without saving</button>
+        <button type="button" class="reset-btn" id="confirmCancel">Cancel</button>
+        <button type="button" class="danger-btn" id="confirmOk">Delete</button>
+      </div>
+    </div>
+  </div>
+  <script src="mock_data.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
