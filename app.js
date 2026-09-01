@@ -9,6 +9,9 @@ Chart.defaults.borderColor = "rgba(148,163,184,.09)";
 const $ = selector => document.querySelector(selector);
 const $$ = selector => [...document.querySelectorAll(selector)];
 
+const WEBAPP_VERSION = "1.0";
+const GITHUB_REPO_URL = "https://github.com/whosdaiz/OmegaDash";
+
 const MATCH_MODE_OPTIONS = [
   { id: "prem_comp", label: "Prem/Comp" },
   { id: "practice", label: "Practice" },
@@ -188,7 +191,7 @@ function emptyState() {
     matches: [],
     maps: [],
     weapons: [],
-    live: { lastPacket: "never", connected: false }
+    live: { lastPacket: "never", connected: false, latestWebAppVer: "" }
   };
 }
 
@@ -2072,6 +2075,103 @@ function paintLiveMeta() {
   const pathEl = $("#packetLogPath");
   if (pathEl && live.ingestUrl) pathEl.textContent = live.ingestUrl;
   paintSensSampleNote();
+  paintAppVersion();
+}
+
+function versionParts(value) {
+  return String(value || "").split(/[^\d]+/).filter(Boolean).map(n => parseInt(n, 10) || 0);
+}
+
+function versionOlder(current, latest) {
+  const a = versionParts(current);
+  const b = versionParts(latest);
+  if (!b.length) return false;
+  const n = Math.max(a.length, b.length, 3);
+  for (let i = 0; i < n; i++) {
+    const left = a[i] || 0;
+    const right = b[i] || 0;
+    if (left < right) return true;
+    if (left > right) return false;
+  }
+  return false;
+}
+
+function paintAppVersion() {
+  const currentEl = $("#appCurrentVer");
+  const latestEl = $("#appLatestVer");
+  const note = $("#appVersionNote");
+  const row = $("#appVersionRow");
+  if (currentEl) currentEl.textContent = WEBAPP_VERSION;
+  const latest = String(data.live?.latestWebAppVer || "").trim();
+  if (latestEl) latestEl.textContent = latest || "—";
+  const stale = Boolean(latest) && versionOlder(WEBAPP_VERSION, latest);
+  row?.classList.toggle("is-stale", stale);
+  const updateDot = $(".update-dot");
+  if (updateDot) updateDot.hidden = !stale;
+  const btn = $("#appVersionBtn");
+  if (btn) {
+    btn.textContent = stale ? "Update" : "No update";
+    btn.disabled = !stale;
+    btn.className = stale ? "settings-save version-update-btn" : "reset-btn version-update-btn";
+  }
+  maybePromptVersionUpdate(latest, stale);
+  if (!note) return;
+  if (stale) {
+    note.hidden = false;
+    note.textContent = "This dashboard is older than the latest version";
+  } else {
+    note.hidden = true;
+    note.textContent = "";
+  }
+}
+
+let versionPopupOffered = false;
+
+function closeVersionPopup() {
+  const overlay = $("#versionPopup");
+  if (!overlay) return;
+  overlay.classList.remove("open");
+  overlay.hidden = true;
+}
+
+function openVersionPopup(latest) {
+  const overlay = $("#versionPopup");
+  if (!overlay) return;
+  const copy = $("#versionPopupCopy");
+  if (copy) {
+    copy.textContent = `You're on ${WEBAPP_VERSION}. Latest version is ${latest}.`;
+  }
+  overlay.hidden = false;
+  requestAnimationFrame(() => overlay.classList.add("open"));
+}
+
+function maybePromptVersionUpdate(latest, stale) {
+  if (versionPopupOffered || !stale || !latest) return;
+  versionPopupOffered = true;
+  openVersionPopup(latest);
+}
+
+function bindVersionPopup() {
+  $("#versionPopupClose")?.addEventListener("click", closeVersionPopup);
+  $("#appVersionBtn")?.addEventListener("click", () => {
+    const latest = String(data.live?.latestWebAppVer || "").trim();
+    if (!latest || !versionOlder(WEBAPP_VERSION, latest)) return;
+    openVersionPopup(latest);
+  });
+  $("#versionPopupGithub")?.addEventListener("click", () => {
+    openInvLink(GITHUB_REPO_URL);
+    closeVersionPopup();
+  });
+  $("#versionPopup")?.addEventListener("click", event => {
+    if (event.target.id !== "versionPopup") return;
+    closeVersionPopup();
+  });
+  document.addEventListener("keydown", event => {
+    if (event.key !== "Escape") return;
+    if (!$("#versionPopup")?.classList.contains("open")) return;
+    event.preventDefault();
+    closeVersionPopup();
+  });
 }
 
 const CS2_YAW = 0.022;
@@ -3564,6 +3664,7 @@ function hydrateSettings() {
   hydrateStatModeControl();
   syncScriptEditorChrome();
   syncCloudPopularUi();
+  paintAppVersion();
 }
 
 const API_KEY_FIELDS = [
@@ -5282,6 +5383,7 @@ function bindInteractions() {
   });
   $("#clearTelemetry")?.addEventListener("click", () => clearAllTelemetry());
   bindConfirmModal();
+  bindVersionPopup();
   bindProfile();
   bindLoot();
   bindInventory();
