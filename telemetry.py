@@ -180,6 +180,7 @@ _lock = threading.Lock()
 _http: ThreadingHTTPServer | None = None
 _ingest_url = f"http://{INGEST_HOST}:{INGEST_PORT}/ingest"
 _last_ingest_at = 0.0
+_latest_webapp_ver = ""
 _file_mtimes: dict[str, float] = {}
 _watch_stop = threading.Event()
 _packet_lock = threading.Lock()
@@ -832,6 +833,12 @@ def _append_packet(src: str, nbytes: int, payload: dict[str, Any] | None, result
         msg = f"error {error or 'failed'} {_fmt_packet_bytes(nbytes)}"
     elif result.get("ignored"):
         msg = f"ignored empty {_fmt_packet_bytes(nbytes)}"
+    elif result.get("kind") == "hello":
+        body = payload or {}
+        ver = _clip_webapp_ver(body.get("Latest_WebApp_Ver")) or _clip_webapp_ver(
+            body.get("latestWebAppVer")
+        )
+        msg = f"version {ver or '—'} · hello · {_fmt_packet_bytes(nbytes)}"
     else:
         body = payload or {}
         fights = result.get("engagements")
@@ -867,12 +874,48 @@ def read_packet_log(after: int = 0) -> dict[str, Any]:
     return {"ok": True, "after": seq, "text": text, "reset": reset, "url": url}
 
 
+def _clip_webapp_ver(value: object) -> str:
+    text = str(value or "").strip()
+    if not text or len(text) > 32:
+        return ""
+    return text
+
+
+def _note_latest_webapp_ver(payload: dict[str, Any]) -> None:
+    global _latest_webapp_ver
+    ver = _clip_webapp_ver(payload.get("Latest_WebApp_Ver")) or _clip_webapp_ver(
+        payload.get("latestWebAppVer")
+    )
+    if ver:
+        _latest_webapp_ver = ver
+
+
+def _is_hello_payload(payload: dict[str, Any]) -> bool:
+    kind = str(payload.get("kind") or "").strip().lower()
+    if kind in {"hello", "version"}:
+        return True
+    if payload.get("id"):
+        return False
+    return bool(
+        _clip_webapp_ver(payload.get("Latest_WebApp_Ver"))
+        or _clip_webapp_ver(payload.get("latestWebAppVer"))
+    )
+
+
 def ingest_json_text(raw: str, *, src: str = "http", log: bool = True) -> dict[str, Any]:
     nbytes = len(raw.encode("utf-8")) if raw else 0
     try:
         payload = json.loads(raw)
         if not isinstance(payload, dict):
             raise ValueError("match JSON must be an object")
+        _note_latest_webapp_ver(payload)
+        if _is_hello_payload(payload):
+            global _last_ingest_at
+            _last_ingest_at = time.time()
+            result = {"ok": True, "kind": "hello"}
+            if log:
+                _append_packet(src, nbytes, payload, result)
+            return result
         result = ingest_match(payload)
         if log:
             _append_packet(src, nbytes, payload, result)
@@ -2394,6 +2437,7 @@ def get_dashboard_state(modes: list[str] | None = None) -> dict[str, Any]:
             "lastPacket": last_packet,
             "matchCount": len(rows),
             "connected": bool(_last_ingest_at and (time.time() - _last_ingest_at) < 30),
+            "latestWebAppVer": _latest_webapp_ver,
         },
     }
 
