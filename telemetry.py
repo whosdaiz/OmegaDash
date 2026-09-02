@@ -1449,22 +1449,20 @@ def _flick_plot_point(eng: dict[str, Any]) -> dict[str, Any] | None:
         along = yaw
     else:
         along = 0.0
+    vert = pitch if pitch is not None else 0.0
     fov = _landing_error_deg(eng)
     if fov is None:
-        fov = math.hypot(along, pitch or 0.0)
-    perp = math.sqrt(max(0.0, fov * fov - along * along))
-    if (pitch or 0.0) < 0:
-        perp = -perp
+        fov = math.hypot(along, vert)
     scale = 1.7
     x_max, y_max = 4.5, 2.5
     x = along / cone * scale
-    y = perp / cone * scale
+    y = vert / cone * scale
     clipped = abs(x) > x_max or abs(y) > y_max
     return {
         "x": round(x, 2),
         "y": round(y, 2),
         "alongDeg": round(along, 2),
-        "vertDeg": round(pitch or 0.0, 2),
+        "vertDeg": round(vert, 2),
         "fovDeg": round(fov, 2),
         "coneDeg": round(cone, 2),
         "clipped": clipped,
@@ -1495,7 +1493,7 @@ def _empty_flick_stats() -> dict[str, int]:
 
 def _add_flick_stat(bucket: dict[str, int], landing: str, clipped: bool) -> None:
     if landing not in ("target", "under", "over"):
-        landing = "target"
+        return
     bucket[landing] += 1
     bucket["total"] += 1
     if clipped:
@@ -1530,7 +1528,7 @@ def _collect_flicks(
         in30 = _in_window(stamp_row, now_ms, 30)
         days_ago = _flick_days_ago(match, now_ms)
         for eng in engagement_map.get(match["id"], []):
-            if not _aim_scored(eng) or eng.get("preaim_shot"):
+            if not _aim_scored(eng) or not _flick_detected(eng) or eng.get("preaim_shot"):
                 continue
             xy = _flick_plot_point(eng)
             if xy is None:
@@ -1550,9 +1548,32 @@ def _collect_flicks(
     return points, stats
 
 
+def _flick_detected(eng: dict[str, Any]) -> bool:
+    """True when this fight has a graded throw. 0° / missing is not a land."""
+    if not isinstance(eng, dict) or eng.get("unattributed"):
+        return False
+    if eng.get("flick_detected") is False:
+        return False
+    deg = _num(eng.get("flick_deg"))
+    if deg is None or deg < 1.5:
+        return False
+    if eng.get("flick_detected") is True:
+        return True
+    return bool(eng.get("flick_verdict"))
+
+
 def _landing_key(eng: dict[str, Any]) -> str:
+    if eng.get("unattributed"):
+        return "unattributed"
+    if not _flick_detected(eng):
+        return "none"
     if eng.get("preaim_shot"):
         return "target"
+    verdict = str(eng.get("flick_verdict") or "")
+    # Lua latches overshoot when the throw goes past. A later correction can
+    # land on the bot (tiny flick_end_deg) — that must not become on-target.
+    if verdict == "overshoot":
+        return "over"
     end_deg = _landing_error_deg(eng)
     distance = _num(eng.get("distance")) or _num(eng.get("preaim_distance"))
     if end_deg is not None and end_deg <= _land_tol(distance) + LAND_TOL_SLACK_DEG:
@@ -1560,13 +1581,10 @@ def _landing_key(eng: dict[str, Any]) -> str:
     error = _num(eng.get("flick_error_deg"))
     if error is not None:
         return "over" if error < 0 else "under"
-    verdict = str(eng.get("flick_verdict") or "")
     if verdict == "on target":
         return "target"
     if verdict == "undershoot":
         return "under"
-    if verdict == "overshoot":
-        return "over"
     return "target"
 
 
@@ -1694,6 +1712,7 @@ def _preaim_scored(eng: dict[str, Any]) -> bool:
 
 
 def _ui_engagement(raw: dict[str, Any], seq: int, round_offset: int = 0) -> dict[str, Any]:
+    detected = _flick_detected(raw)
     landing = _landing_key(raw)
     out = dict(raw)
     out["id"] = seq
@@ -1702,9 +1721,10 @@ def _ui_engagement(raw: dict[str, Any], seq: int, round_offset: int = 0) -> dict
     held = bool(raw.get("preaim_already_visible") or raw.get("preaim_occupied"))
     out["preaimHeld"] = held
     out["preaim"] = round(_num(raw.get("preaim_deg")) or 0, 1)
-    out["flick"] = round(_num(raw.get("flick_deg")) or 0, 1)
+    out["flickDetected"] = detected
+    out["flick"] = round(_num(raw.get("flick_deg")), 1) if detected and _num(raw.get("flick_deg")) is not None else None
     out["landing"] = landing
-    out["landingDeg"] = round(_num(raw.get("flick_end_deg")) or 0, 2)
+    out["landingDeg"] = round(_num(raw.get("flick_end_deg")) or 0, 2) if detected else None
     out["reaction"] = int(round(_num(raw.get("reaction_ms")) or 0))
     ttk = _num(raw.get("ttk_ms"))
     out["ttk"] = int(round(ttk)) if ttk is not None else None
@@ -1725,10 +1745,12 @@ def _ui_engagement(raw: dict[str, Any], seq: int, round_offset: int = 0) -> dict
         out["firstShot"] = None
         out["reaction"] = None
         out["flick"] = None
+        out["flickDetected"] = False
         out["preaim"] = None
         out["pathEff"] = None
         out["ttk"] = None
         out["velocity"] = None
+        out["landingDeg"] = None
     return out
 
 
@@ -1847,7 +1869,7 @@ def _match_aim(engagements: list[dict[str, Any]]) -> dict[str, Any]:
                 cs_ok += 1
         if eng.get("preaim_shot"):
             preaimed += 1
-        else:
+        elif _flick_detected(eng):
             land[_landing_key(eng)] = land.get(_landing_key(eng), 0) + 1
         pe = _path_eff(eng)
         if pe is not None:
@@ -2192,7 +2214,7 @@ def _weapon_rows(engagement_map: dict[str, list[dict[str, Any]]]) -> list[dict[s
                     bucket["cs_ok"] += 1
             if eng.get("preaim_shot"):
                 bucket["preaimed"] += 1
-            elif _aim_scored(eng):
+            elif _aim_scored(eng) and _flick_detected(eng):
                 land_key = _landing_key(eng)
                 bucket["land"][land_key] = bucket["land"].get(land_key, 0) + 1
 
@@ -2501,7 +2523,11 @@ def _flick_size(deg: float | None) -> str | None:
 def _land_counts(engagements: list[dict[str, Any]]) -> dict[str, int]:
     land = {"under": 0, "target": 0, "over": 0}
     for eng in engagements:
-        land[_landing_key(eng)] = land.get(_landing_key(eng), 0) + 1
+        if not _flick_detected(eng) or eng.get("preaim_shot"):
+            continue
+        key = _landing_key(eng)
+        if key in land:
+            land[key] += 1
     return land
 
 
@@ -2521,14 +2547,21 @@ def _compact_fight(eng: dict[str, Any]) -> dict[str, Any]:
     flick = _num(eng.get("flick_deg"))
     _, weapon_name, weapon_class = _weapon_meta(eng)
     pe = _path_eff(eng)
+    detected = _flick_detected(eng)
+    if not _aim_scored(eng):
+        landing = "unattributed"
+    elif not detected:
+        landing = "none"
+    else:
+        landing = _landing_key(eng)
     return {
         "result": eng.get("result"),
         "weapon": weapon_name,
         "class": weapon_class,
-        "landing": _landing_key(eng) if _aim_scored(eng) else "unattributed",
-        "flickDeg": round(flick, 1) if flick is not None else None,
-        "flickSize": _flick_size(flick),
-        "errorDeg": round(_num(eng.get("flick_error_deg")) or 0, 2) if _num(eng.get("flick_error_deg")) is not None else None,
+        "landing": landing,
+        "flickDeg": round(flick, 1) if detected and flick is not None else None,
+        "flickSize": _flick_size(flick) if detected else None,
+        "errorDeg": round(_num(eng.get("flick_error_deg")) or 0, 2) if detected and _num(eng.get("flick_error_deg")) is not None else None,
         "preaimDeg": round(_num(eng.get("preaim_deg")) or 0, 1) if _num(eng.get("preaim_deg")) is not None else None,
         "preaimHeld": bool(eng.get("preaim_already_visible") or eng.get("preaim_occupied")),
         "preaimShot": bool(eng.get("preaim_shot")),
@@ -2550,7 +2583,12 @@ def _sample_fights(engagements: list[dict[str, Any]], limit: int = SENS_MAX_FIGH
     ]
     buckets: dict[str, list[dict[str, Any]]] = {"under": [], "target": [], "over": []}
     for eng in resolved:
-        buckets[_landing_key(eng)].append(eng)
+        if not _flick_detected(eng):
+            continue
+        key = _landing_key(eng)
+        if key not in buckets:
+            continue
+        buckets[key].append(eng)
     for key in buckets:
         buckets[key].sort(key=lambda item: _num(item.get("flick_deg")) or 0, reverse=True)
     picked: list[dict[str, Any]] = []
@@ -2575,7 +2613,7 @@ def _sample_fights(engagements: list[dict[str, Any]], limit: int = SENS_MAX_FIGH
 def _flick_size_stats(engagements: list[dict[str, Any]]) -> dict[str, Any]:
     sizes: dict[str, list[dict[str, Any]]] = {"small": [], "medium": [], "large": []}
     for eng in engagements:
-        if eng.get("preaim_shot"):
+        if eng.get("preaim_shot") or not _flick_detected(eng):
             continue
         size = _flick_size(_num(eng.get("flick_deg")))
         if size:
