@@ -2826,20 +2826,6 @@ def round_sens_suggest(value: float) -> float:
     return round(max(0.01, min(20.0, float(value))), 2)
 
 
-def _work_steps(work: dict[str, Any] | None) -> list[str]:
-    raw = work.get("steps") if isinstance(work, dict) else None
-    if not isinstance(raw, list):
-        return []
-    out: list[str] = []
-    for item in raw:
-        text = " ".join(str(item or "").split())
-        if text:
-            out.append(text[:420])
-        if len(out) >= 10:
-            break
-    return out
-
-
 def verify_sens_work(
     sens: float | None,
     dpi: float | None,
@@ -2848,7 +2834,8 @@ def verify_sens_work(
     """Check Gemini's own F/E (or eDPI step). Do not pick those inputs for it.
 
     CS2: degrees = counts × 0.022 × sens, so extra/missing degrees scale 1:1 with
-    sens: new = current × (1 + E/F).
+    sens: new = current × (1 + E/F). The in-game listing is that result at
+    2 decimals.
     """
     if not isinstance(work, dict):
         return None
@@ -2865,7 +2852,6 @@ def verify_sens_work(
         has_step = _num(work.get("setupStep") or work.get("step"))
         method = "setup" if has_step is not None and (has_f is None or has_e is None) else "flicks"
     claimed = _num(work.get("sens"))
-    gemini_steps = _work_steps(work)
 
     def cm_of(value: float) -> float:
         return cm360(value, dpi_n)
@@ -2886,20 +2872,24 @@ def verify_sens_work(
         if abs(nxt - current) < 1e-5:
             return None
         toward = "higher" if nxt > current else "lower"
-        steps = gemini_steps + [
+        listed = round_sens_suggest(nxt)
+        steps = [
             f"Arithmetic: gap to 900 eDPI = {TYPICAL_EDPI:.0f} − {current_edpi:.2f} = {gap:+.2f}.",
             f"new eDPI = {current_edpi:.2f} + {step:.2f} × ({gap:+.2f}) = {new_edpi:.2f}.",
             f"new sens = {new_edpi:.2f} / {int(dpi_n)} = {nxt:.5f} ({toward}). cm/360 {cm_of(current)} → {cm_of(nxt)}.",
+            f"Round to two in-game decimals: {listed:.2f}.",
         ]
-        if claimed is not None and abs(claimed - nxt) > 5e-5:
+        claimed_new = claimed is not None and abs(claimed - current) > 1e-4
+        if claimed_new and abs(round_sens_suggest(claimed) - listed) > 0.005:
             steps.append(
-                f"The listed sens {claimed:g} did not match this arithmetic, so the number shown is {nxt:.5f}."
+                f"A different listing {claimed:g} did not match this arithmetic, so the suggestion is {listed:.2f}."
             )
         return {
             "kind": "setup",
             "source": "gemini",
             "currentSens": round_sens(current),
             "sens": nxt,
+            "listedSens": listed,
             "dpi": int(dpi_n),
             "setupStep": round(step, 4),
             "targetEdpi": TYPICAL_EDPI,
@@ -2914,7 +2904,7 @@ def verify_sens_work(
             "claimedSens": claimed,
             "reason": (
                 f"{edpi(current, dpi_n)} eDPI is outside 700–1100. "
-                f"A {step * 100:.0f}% step toward 900 eDPI is {nxt:.5f}."
+                f"A {step * 100:.0f}% step toward 900 eDPI is {listed:.2f}."
             ),
         }
 
@@ -2939,7 +2929,8 @@ def verify_sens_work(
         if clamped
         else f"{current:g} × (1 + ({error_deg:.3f} / {flick_deg:.3f})) = {nxt:.5f}"
     )
-    steps = gemini_steps + [
+    listed = round_sens_suggest(nxt)
+    steps = [
         f"CS2 yaw is {CS2_YAW}. Degrees = mouse counts × {CS2_YAW} × sens, so E/F scales 1:1 with sens.",
         f"F = {flick_deg:.3f}°, E = {error_deg:+.3f}° ({sign}). Gain = E/F = {raw_gain:+.5f} ({raw_gain * 100:+.2f}%).",
     ]
@@ -2949,15 +2940,18 @@ def verify_sens_work(
         f"new = current × (1 + E/F) = {equation}. Same DPI {int(dpi_n)}. "
         f"eDPI {edpi(current, dpi_n)} → {edpi(nxt, dpi_n)}. cm/360 {cm_of(current)} → {cm_of(nxt)}."
     )
-    if claimed is not None and abs(claimed - nxt) > 5e-5:
+    steps.append(f"Round to two in-game decimals: {listed:.2f}.")
+    claimed_new = claimed is not None and abs(claimed - current) > 1e-4
+    if claimed_new and abs(round_sens_suggest(claimed) - listed) > 0.005:
         steps.append(
-            f"The listed sens {claimed:g} did not match this arithmetic, so the number shown is {nxt:.5f}."
+            f"A different listing {claimed:g} did not match this arithmetic, so the suggestion is {listed:.2f}."
         )
     return {
         "kind": "flicks",
         "source": "gemini",
         "currentSens": round_sens(current),
         "sens": nxt,
+        "listedSens": listed,
         "dpi": int(dpi_n),
         "factor": round(factor, 5),
         "gain": round(signed, 5),
@@ -2975,7 +2969,7 @@ def verify_sens_work(
         "reason": (
             f"Flicks of {flick_deg:.2f}° landed {abs(error_deg):.2f}° {sign.split(' / ')[0]}, "
             f"so gain is {abs(raw_gain) * 100:.2f}% too {'low' if nxt > current else 'high'}. "
-            f"{toward.capitalize()} to {nxt:.5f}."
+            f"{toward.capitalize()} to {listed:.2f}."
         ),
     }
 
