@@ -2356,9 +2356,10 @@ Not a reason: pre-aim offset, head-level, TTK, first-shot, counter-strafe, path 
 If you recommend a number:
 - Same DPI, 2 decimal places (example 1.18).
 - Lower if overshooting, higher if undershooting.
-- Modest step (about 4–18%). Cite n, under/on/over, avgSignedError, avgFlickDeg.
-- You may use new = current × (1 + E/F) then round to 2 decimals.
+- Use new = current × (1 + E/F) from large-flick avgSignedError E and avgFlickDeg F, then round to 2 decimals. suggestedSens MUST be that rounded value. Do not pick a bigger step than the formula.
+- Modest because E/F is modest — not because you walked past the calculated value.
 - verdict = "change". Never say too high/too low and then keep the same number.
+- mathWork.method = "flicks", with flickDeg, errorDeg, and sens equal to that rounded value.
 
 If you keep:
 - verdict = "keep". Leave suggestedSens unused.
@@ -3031,6 +3032,34 @@ def _clean_sens_value(value: Any, current: float) -> float | None:
     return n
 
 
+def _sens_number_forms(value: float) -> list[str]:
+    forms = {
+        f"{value:g}",
+        f"{value:.2f}",
+        f"{value:.5f}".rstrip("0").rstrip("."),
+    }
+    return sorted((form for form in forms if form and form != "0"), key=len, reverse=True)
+
+
+def _replace_sens_number(text: str, old: float, new: float) -> str:
+    if not text or abs(old - new) < 0.005:
+        return text
+    out = text
+    listed = f"{new:.2f}"
+    for form in _sens_number_forms(old):
+        out = re.sub(rf"(?<![\d.]){re.escape(form)}(?![\d.])", listed, out)
+    return out
+
+
+def _align_sens_copy(text: str, discarded: list[float], listed: float, current: float) -> str:
+    out = text
+    for old in discarded:
+        if abs(old - listed) < 0.005 or abs(old - current) < 0.005:
+            continue
+        out = _replace_sens_number(out, old, listed)
+    return out
+
+
 def _normalize_sens_analysis(
     raw: dict[str, Any],
     sens: float,
@@ -3044,13 +3073,16 @@ def _normalize_sens_analysis(
     lean = str(signals.get("direction") or "").strip().lower()
     gemini_verdict = str(raw.get("verdict") or "").strip().lower()
 
+    math_listed = _clean_sens_value(math.get("listedSens") or math.get("sens"), sens)
+    gemini_listed = (
+        _clean_sens_value(raw.get("suggestedSens"), sens)
+        or _clean_sens_value(raw.get("optionalSens"), sens)
+    )
+    # Verified F/E (or eDPI) arithmetic wins when Gemini wants a change.
+    # It may not invent a farther step than the formula.
     suggested = None
     if gemini_verdict != "keep":
-        suggested = (
-            _clean_sens_value(raw.get("suggestedSens"), sens)
-            or _clean_sens_value(raw.get("optionalSens"), sens)
-            or _clean_sens_value(math.get("sens"), sens)
-        )
+        suggested = math_listed or gemini_listed
     stripped = False
     if suggested and not worth:
         suggested = None
@@ -3082,13 +3114,21 @@ def _normalize_sens_analysis(
         confidence = 0
     confidence = max(0, min(100, confidence))
 
-    why = str(raw.get("optionalWhy") or "").strip()
-    if not why:
-        why = str(math.get("reason") or "").strip()
-    if not suggested:
-        why = ""
+    discarded = [value for value in (gemini_listed,) if value is not None]
+    why = ""
+    if suggested:
+        why = str(math.get("reason") or raw.get("optionalWhy") or "").strip()
+        why = _align_sens_copy(why, discarded, suggested, float(sens))
 
     headline = _clip_text(raw.get("headline"), 140)
+    summary = _clip_text(raw.get("summary"), 1200)
+    findings = _clip_list(raw.get("findings"), 8, 420)
+    actions = _clip_list(raw.get("actions"), 6, 360)
+    if suggested:
+        headline = _align_sens_copy(headline, discarded, suggested, float(sens))
+        summary = _align_sens_copy(summary, discarded, suggested, float(sens))
+        findings = [_align_sens_copy(item, discarded, suggested, float(sens)) for item in findings]
+        actions = [_align_sens_copy(item, discarded, suggested, float(sens)) for item in actions]
     if stripped:
         headline = "Keep this sens — flicks don’t show a clear reason to change"
     elif not headline:
@@ -3106,9 +3146,9 @@ def _normalize_sens_analysis(
         "optionalCm360": None,
         "optionalWhy": why,
         "headline": headline,
-        "summary": _clip_text(raw.get("summary"), 1200),
-        "findings": _clip_list(raw.get("findings"), 8, 420),
-        "actions": _clip_list(raw.get("actions"), 6, 360),
+        "summary": summary,
+        "findings": findings,
+        "actions": actions,
         "math": math or None,
     }
     return out
