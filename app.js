@@ -675,13 +675,39 @@ function radarPoint(point, width, height) {
   return { x: point.x * width, y: point.y * height };
 }
 
+function noFlickDetected(engagement) {
+  if (!engagement || engagement.unattributed) return false;
+  if (engagement.flickDetected === false || engagement.landing === "none") return true;
+  const deg = Number(engagement.flick);
+  if (!Number.isFinite(deg) || deg < 1.5) return true;
+  return false;
+}
+
 function landingLabel(engagement) {
   if (!engagement) return "—";
   if (engagement.unattributed) return engagement.unattributedWhy || "Unattributed";
+  if (noFlickDetected(engagement)) return "No flick detected";
   if (engagement.landing === "target") return "On target";
   if (engagement.landing === "under") return `Undershoot ${engagement.landingDeg}°`;
   if (engagement.landing === "over") return `Overshoot ${engagement.landingDeg}°`;
   return engagement.landing || "—";
+}
+
+function landingPillText(engagement) {
+  if (!engagement) return "—";
+  if (engagement.unattributed) return engagement.unattributedWhy || "UNATTRIBUTED";
+  if (noFlickDetected(engagement)) return "NO FLICK DETECTED";
+  if (engagement.landing === "target") return "ON TARGET";
+  if (engagement.landing === "under" || engagement.landing === "over") {
+    return `${String(engagement.landing).toUpperCase()} ${engagement.landingDeg}°`;
+  }
+  return String(engagement.landing || "—").toUpperCase();
+}
+
+function flickCell(engagement) {
+  if (!engagement || engagement.unattributed) return "—";
+  if (noFlickDetected(engagement) || engagement.flick == null) return "—";
+  return `${engagement.flick}°`;
 }
 
 function findEngagement(id) {
@@ -854,7 +880,7 @@ function drawLocationHeatmap(mode) {
           <div><span>Round</span><strong>${roundText ?? "—"}</strong></div>
           <div><span>Weapon</span><strong>${esc(engagement.weapon || "—")}</strong></div>
           <div><span>Pre-aim</span><strong>${engagement.unattributed ? "—" : engagement.preaimHeld ? "already vis" : `${esc(engagement.preaim)}°`}</strong></div>
-          <div><span>Flick</span><strong>${engagement.unattributed || engagement.flick == null ? "—" : `${esc(engagement.flick)}°`}</strong></div>
+          <div><span>Flick</span><strong>${esc(flickCell(engagement))}</strong></div>
           <div><span>Path</span><strong>${esc(fmtPathEff(engagement.pathEff))}</strong></div>
           <div><span>Landing</span><strong>${esc(landingLabel(engagement))}</strong></div>
           <div><span>Reaction</span><strong>${engagement.reaction != null ? `${esc(engagement.reaction)}ms` : "—"}</strong></div>
@@ -1527,7 +1553,7 @@ function renderLastMatch() {
     <tr data-id="${e.id}" data-round="${engagementRound(e) ?? ""}"><td>${String(e.id).padStart(2,"0")}</td><td><span class="result-pill ${(e.result || "").toLowerCase()}${e.unattributed ? " unattributed" : ""}">${e.result || "—"}</span></td>
     <td>${engagementRound(e) ?? "—"}</td>
     <td>${e.weapon || "—"}</td>
-    <td>${e.unattributed ? "—" : e.preaimHeld ? "already vis" : `${e.preaim}°`}</td><td>${e.unattributed || e.flick == null ? "—" : `${e.flick}°`}</td><td>${fmtPathEff(e.pathEff)}</td><td><span class="landing-pill ${e.landing}">${e.unattributed ? (e.unattributedWhy || "UNATTRIBUTED") : e.landing === "target" ? "ON TARGET" : `${String(e.landing || "").toUpperCase()} ${e.landingDeg}°`}</span></td>
+    <td>${e.unattributed ? "—" : e.preaimHeld ? "already vis" : `${e.preaim}°`}</td><td>${esc(flickCell(e))}</td><td>${fmtPathEff(e.pathEff)}</td><td><span class="landing-pill ${noFlickDetected(e) ? "none" : e.landing}">${esc(landingPillText(e))}</span></td>
     <td><strong>${e.reaction != null ? `${e.reaction}ms` : "—"}</strong></td><td>${e.ttk ? `${e.ttk}ms` : "—"}</td><td>${e.firstShot == null ? "—" : e.firstShot ? "HIT" : "MISS"}</td><td>${e.velocity != null ? `${e.velocity} u/s` : "—"}</td></tr>`).join("");
   highlightEngagementRow(selectedSpotId);
   syncEngagementRoundHighlight();
