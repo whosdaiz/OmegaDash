@@ -1428,43 +1428,42 @@ def _land_tol(distance: float | None) -> float:
 
 
 def _flick_plot_point(eng: dict[str, Any]) -> dict[str, Any] | None:
-    """Place the dot on the original ±4.5° / ±2.5° graph so color matches position.
-
-    Each fight is scaled by its on-target cone first, then drawn in the old
-    window: on-target sits near the origin, unders to the left, overs to the
-    right. Hover still shows the real degrees.
-    """
+    """Plot real degrees: under left, over right, on-target near the origin."""
+    landing = _landing_key(eng)
+    if landing not in ("target", "under", "over"):
+        return None
+    miss = _landing_error_deg(eng)
     error = _num(eng.get("flick_error_deg"))
     yaw = _num(eng.get("flick_land_yaw"))
     pitch = _num(eng.get("flick_land_pitch"))
-    if error is None and yaw is None and pitch is None:
+    if miss is None and error is not None:
+        miss = abs(error)
+    if miss is None and yaw is None and pitch is None:
         return None
+    if miss is None:
+        miss = math.hypot(yaw or 0.0, pitch or 0.0)
+
+    if landing == "target":
+        along = yaw or 0.0
+        vert = pitch or 0.0
+    elif landing == "over":
+        along = miss
+        vert = pitch if pitch is not None else 0.0
+    else:
+        along = -miss
+        vert = pitch if pitch is not None else 0.0
+
+    x_max, y_max = 4.5, 2.5
+    clipped = abs(along) > x_max or abs(vert) > y_max
     distance = _num(eng.get("distance")) or _num(eng.get("preaim_distance"))
     cone = _land_tol(distance) + LAND_TOL_SLACK_DEG
-    if cone <= 0:
-        cone = 1.0
-    if error is not None:
-        along = -error
-    elif yaw is not None:
-        along = yaw
-    else:
-        along = 0.0
-    vert = pitch if pitch is not None else 0.0
-    fov = _landing_error_deg(eng)
-    if fov is None:
-        fov = math.hypot(along, vert)
-    scale = 1.7
-    x_max, y_max = 4.5, 2.5
-    x = along / cone * scale
-    y = vert / cone * scale
-    clipped = abs(x) > x_max or abs(y) > y_max
     return {
-        "x": round(x, 2),
-        "y": round(y, 2),
+        "x": round(along, 2),
+        "y": round(vert, 2),
         "alongDeg": round(along, 2),
         "vertDeg": round(vert, 2),
-        "fovDeg": round(fov, 2),
-        "coneDeg": round(cone, 2),
+        "fovDeg": round(miss, 2),
+        "coneDeg": round(cone, 2) if cone else 0.0,
         "clipped": clipped,
     }
 
@@ -1574,17 +1573,13 @@ def _landing_key(eng: dict[str, Any]) -> str:
     # land on the bot (tiny flick_end_deg) — that must not become on-target.
     if verdict == "overshoot":
         return "over"
-    end_deg = _landing_error_deg(eng)
-    distance = _num(eng.get("distance")) or _num(eng.get("preaim_distance"))
-    if end_deg is not None and end_deg <= _land_tol(distance) + LAND_TOL_SLACK_DEG:
+    if verdict == "undershoot":
+        return "under"
+    if verdict == "on target":
         return "target"
     error = _num(eng.get("flick_error_deg"))
     if error is not None:
         return "over" if error < 0 else "under"
-    if verdict == "on target":
-        return "target"
-    if verdict == "undershoot":
-        return "under"
     return "target"
 
 
