@@ -120,6 +120,10 @@ TARGET_RADIUS = 14.0
 LAND_TOL_FLOOR_DEG = 0.75
 LAND_TOL_MAX_DEG = 4.0
 LAND_TOL_SLACK_DEG = 0.25
+# Hits fill this band on the graph so they are a cluster, not a line, and
+# cannot sit wider than a far-range miss (those start around 0.5°).
+ON_TARGET_PLOT_CORE_DEG = 0.4
+HESITATION_MAX_MS = 1500
 
 # Horizontal speed still accurate enough to count as a counter-strafe (u/s).
 CS_LIMIT_RIFLE = 50.0
@@ -1427,8 +1431,38 @@ def _land_tol(distance: float | None) -> float:
     return max(LAND_TOL_FLOOR_DEG, min(LAND_TOL_MAX_DEG, deg))
 
 
+def _fit_on_target_cluster(points: list[dict[str, Any]]) -> None:
+    """Spread hits around the origin from real in-box yaw, without outrunning misses."""
+    targets = [p for p in points if p.get("type") == "target" and not p.get("clipped")]
+    if not targets:
+        return
+    raw = [
+        float(p["alongDeg"] if p.get("alongDeg") is not None else p.get("x") or 0)
+        for p in targets
+    ]
+    max_abs = max((abs(v) for v in raw), default=0.0)
+    if max_abs <= 0:
+        return
+    misses = [
+        abs(float(p.get("x") or 0))
+        for p in points
+        if p.get("type") in ("under", "over") and not p.get("clipped")
+    ]
+    core = ON_TARGET_PLOT_CORE_DEG
+    if misses:
+        core = min(core, min(misses) * 0.8)
+    core = max(core, 0.3)
+    scale = 1.0 if max_abs <= core else core / max_abs
+    for point, yaw in zip(targets, raw):
+        point["x"] = round(yaw * scale, 2)
+
+
 def _flick_plot_point(eng: dict[str, Any]) -> dict[str, Any] | None:
-    """Plot real degrees: under left, over right, on-target near the origin."""
+    """Plot real degrees: under left, over right, on-target in a center cluster.
+
+    Misses are 1:1 ±flick_end_deg. Hits use in-box yaw; _fit_on_target_cluster
+    then scales that cloud so it cannot sit wider than under/over.
+    """
     landing = _landing_key(eng)
     if landing not in ("target", "under", "over"):
         return None
@@ -1443,20 +1477,18 @@ def _flick_plot_point(eng: dict[str, Any]) -> dict[str, Any] | None:
     if miss is None:
         miss = math.hypot(yaw or 0.0, pitch or 0.0)
 
+    distance = _num(eng.get("distance")) or _num(eng.get("preaim_distance"))
+    cone = _land_tol(distance) + LAND_TOL_SLACK_DEG
+    vert = pitch if pitch is not None else 0.0
     if landing == "target":
-        along = yaw or 0.0
-        vert = pitch or 0.0
+        along = yaw if yaw is not None else 0.0
     elif landing == "over":
         along = miss
-        vert = pitch if pitch is not None else 0.0
     else:
         along = -miss
-        vert = pitch if pitch is not None else 0.0
 
     x_max, y_max = 4.5, 2.5
     clipped = abs(along) > x_max or abs(vert) > y_max
-    distance = _num(eng.get("distance")) or _num(eng.get("preaim_distance"))
-    cone = _land_tol(distance) + LAND_TOL_SLACK_DEG
     return {
         "x": round(along, 2),
         "y": round(vert, 2),
@@ -1544,6 +1576,7 @@ def _collect_flicks(
                 if days_ago is not None:
                     point["daysAgo"] = round(days_ago, 4)
                 points.append(point)
+    _fit_on_target_cluster(points)
     return points, stats
 
 
@@ -1706,6 +1739,107 @@ def _preaim_scored(eng: dict[str, Any]) -> bool:
     return _num(eng.get("preaim_deg")) is not None
 
 
+PREAIM_CLASSES = ("on head", "tight", "loose", "wide")
+_PREAIM_CLASS_ALIASES = {
+    "on head": "on head",
+    "onhead": "on head",
+    "on-head": "on head",
+    "tight": "tight",
+    "loose": "loose",
+    "wide": "wide",
+}
+
+
+def _on_target_cone(distance: float | None) -> float:
+    if not distance or distance <= 1:
+        return 3.0
+    deg = math.degrees(math.atan(HEAD_RADIUS / distance))
+    return max(0.15, min(3.0, deg))
+
+
+def _classify_preaim(deg: float, cone: float) -> str:
+    if deg <= cone:
+        return "on head"
+    if deg <= 5:
+        return "tight"
+    if deg <= 15:
+        return "loose"
+    return "wide"
+
+
+def _preaim_class(eng: dict[str, Any]) -> str | None:
+    """First-peek class for scored peeks only. Skip already-vis / occupied."""
+    if not _preaim_scored(eng):
+        return None
+    raw = str(eng.get("preaim_class") or "").strip().lower()
+    if raw in {"already visible", "occupied"}:
+        return None
+    if raw in _PREAIM_CLASS_ALIASES:
+        return _PREAIM_CLASS_ALIASES[raw]
+    deg = _num(eng.get("preaim_deg"))
+    if deg is None:
+        return None
+    return _classify_preaim(deg, _on_target_cone(_num(eng.get("preaim_distance"))))
+
+
+def _pack_class_mix(counts: dict[str, int]) -> dict[str, Any]:
+    total = sum(counts.get(key, 0) for key in PREAIM_CLASSES)
+    pcts = {
+        key: int(round(_safe_div(counts.get(key, 0), total) * 100)) if total else 0
+        for key in PREAIM_CLASSES
+    }
+    parts = [f"{pcts[key]}% {key}" for key in PREAIM_CLASSES if pcts[key]]
+    return {
+        "onHead": pcts["on head"],
+        "tight": pcts["tight"],
+        "loose": pcts["loose"],
+        "wide": pcts["wide"],
+        "n": total,
+        "label": " · ".join(parts),
+    }
+
+
+def _new_aim_extras() -> dict[str, Any]:
+    return {
+        "hesitations": [],
+        "classes": {key: 0 for key in PREAIM_CLASSES},
+    }
+
+
+def _hesitation_ms(eng: dict[str, Any]) -> int | None:
+    """Time sitting on them before the shot. Skip missing and garbage clocks."""
+    if not _aim_scored(eng):
+        return None
+    if eng.get("reaction_valid") is False:
+        return None
+    hold = _num(eng.get("fire_delay_ms"))
+    if hold is None:
+        return None
+    hold = max(0.0, hold)
+    if hold > HESITATION_MAX_MS:
+        return None
+    return int(round(hold))
+
+
+def _note_aim_extras(bucket: dict[str, Any], eng: dict[str, Any]) -> None:
+    if not _aim_scored(eng):
+        return
+    hes = _hesitation_ms(eng)
+    if hes is not None:
+        bucket["hesitations"].append(hes)
+    cls = _preaim_class(eng)
+    if cls:
+        bucket["classes"][cls] = bucket["classes"].get(cls, 0) + 1
+
+
+def _pack_aim_extras(bucket: dict[str, Any]) -> dict[str, Any]:
+    hesitations = bucket["hesitations"]
+    return {
+        "hesitation": int(round(sum(hesitations) / len(hesitations))) if hesitations else None,
+        "preaimClass": _pack_class_mix(bucket["classes"]),
+    }
+
+
 def _ui_engagement(raw: dict[str, Any], seq: int, round_offset: int = 0) -> dict[str, Any]:
     detected = _flick_detected(raw)
     landing = _landing_key(raw)
@@ -1716,11 +1850,13 @@ def _ui_engagement(raw: dict[str, Any], seq: int, round_offset: int = 0) -> dict
     held = bool(raw.get("preaim_already_visible") or raw.get("preaim_occupied"))
     out["preaimHeld"] = held
     out["preaim"] = round(_num(raw.get("preaim_deg")) or 0, 1)
+    out["preaimClass"] = _preaim_class(raw)
     out["flickDetected"] = detected
     out["flick"] = round(_num(raw.get("flick_deg")), 1) if detected and _num(raw.get("flick_deg")) is not None else None
     out["landing"] = landing
     out["landingDeg"] = round(_num(raw.get("flick_end_deg")) or 0, 2) if detected else None
     out["reaction"] = int(round(_num(raw.get("reaction_ms")) or 0))
+    out["hesitation"] = _hesitation_ms(raw)
     ttk = _num(raw.get("ttk_ms"))
     out["ttk"] = int(round(ttk)) if ttk is not None else None
     out["firstShot"] = bool(raw.get("first_shot_hit"))
@@ -1746,6 +1882,8 @@ def _ui_engagement(raw: dict[str, Any], seq: int, round_offset: int = 0) -> dict
         out["ttk"] = None
         out["velocity"] = None
         out["landingDeg"] = None
+        out["preaimClass"] = None
+        out["hesitation"] = None
     return out
 
 
@@ -1838,9 +1976,11 @@ def _match_aim(engagements: list[dict[str, Any]]) -> dict[str, Any]:
     head_ok = 0
     paths = []
     eligible = 0
+    extras = _new_aim_extras()
     for eng in engagements:
         if not _aim_scored(eng):
             continue
+        _note_aim_extras(extras, eng)
         if _preaim_eligible(eng):
             eligible += 1
         if eng.get("reaction_valid") is not False and _num(eng.get("reaction_ms")) is not None:
@@ -1870,7 +2010,7 @@ def _match_aim(engagements: list[dict[str, Any]]) -> dict[str, Any]:
         if pe is not None:
             paths.append(pe)
     total_land = sum(land.values()) or 1
-    return {
+    out = {
         "reaction": int(round(sum(reactions) / len(reactions))) if reactions else 0,
         "ttk": int(round(sum(ttks) / len(ttks))) if ttks else 0,
         "preaim": round(sum(preaims) / len(preaims), 1) if preaims else 0,
@@ -1887,6 +2027,8 @@ def _match_aim(engagements: list[dict[str, Any]]) -> dict[str, Any]:
         "reactionN": len(reactions),
         "ttkN": len(ttks),
     }
+    out.update(_pack_aim_extras(extras))
+    return out
 
 
 def _payload_dict(row: dict[str, Any]) -> dict[str, Any]:
@@ -2038,6 +2180,8 @@ def _ui_match(row: dict[str, Any], engagements: list[dict[str, Any]]) -> dict[st
         "ttk": aim["ttk"],
         "headLevel": aim["headLevel"],
         "pathEff": aim["pathEff"],
+        "hesitation": aim.get("hesitation"),
+        "preaimClass": aim.get("preaimClass") or _pack_class_mix({}),
         "landing": aim["landing"],
         "side": _side_split(row, engagements),
         "engagements": ui_eng,
@@ -2076,11 +2220,13 @@ def _aggregate(matches: list[dict[str, Any]], engagement_map: dict[str, list[dic
     fights = 0
     eligible = 0
     paths = []
+    extras = _new_aim_extras()
     for match in matches:
         for eng in engagement_map.get(match["id"], []):
             fights += 1
             if not _aim_scored(eng):
                 continue
+            _note_aim_extras(extras, eng)
             if _preaim_eligible(eng):
                 eligible += 1
             if eng.get("reaction_valid") is not False and _num(eng.get("reaction_ms")) is not None:
@@ -2112,7 +2258,7 @@ def _aggregate(matches: list[dict[str, Any]], engagement_map: dict[str, list[dic
             pe = _path_eff(eng)
             if pe is not None:
                 paths.append(pe)
-    return {
+    out = {
         "matches": len(matches),
         "engagements": fights,
         "hoursTracked": round(hours, 1),
@@ -2128,6 +2274,8 @@ def _aggregate(matches: list[dict[str, Any]], engagement_map: dict[str, list[dic
         "headLevel": round(_safe_div(head_level, head_n) * 100) if head_n else 0,
         "preAimed": round(_safe_div(preaimed, eligible) * 100) if eligible else 0,
     }
+    out.update(_pack_aim_extras(extras))
+    return out
 
 
 def _row_stamp_ms(row: dict[str, Any]) -> int:
@@ -2380,6 +2528,11 @@ def get_dashboard_state(modes: list[str] | None = None) -> dict[str, Any]:
             "firstShot": stats["firstShot"],
             "counterStrafe": stats["counterStrafe"],
             "pathEff": stats.get("pathEff") or 0,
+            "hesitation": stats.get("hesitation"),
+            "preaimClass": stats.get("preaimClass") or _pack_class_mix({}),
+            "placementOffset": stats.get("placementOffset") or 0,
+            "headLevel": stats.get("headLevel") or 0,
+            "preAimed": stats.get("preAimed") or 0,
         }
         if prev and (prev.get("matches") or 0) > 0:
             out["kdDelta"] = _pct_change(stats["kd"], prev["kd"])
@@ -2388,6 +2541,8 @@ def get_dashboard_state(modes: list[str] | None = None) -> dict[str, Any]:
             out["firstShotDelta"] = _pct_change(stats["firstShot"], prev["firstShot"])
             out["counterStrafeDelta"] = _pct_change(stats["counterStrafe"], prev["counterStrafe"])
             out["pathEffDelta"] = _pct_change(stats.get("pathEff") or 0, prev.get("pathEff") or 0)
+            if stats.get("hesitation") is not None and prev.get("hesitation") is not None:
+                out["hesitationDelta"] = _pct_change(stats["hesitation"], prev["hesitation"])
         return out
 
     flick_points, flick_stats = _collect_flicks(stat_ui, stat_eng, now_ms)
@@ -2414,7 +2569,11 @@ def get_dashboard_state(modes: list[str] | None = None) -> dict[str, Any]:
     reaction_history = []
     chronological = list(reversed(stat_ui[:REACTION_HISTORY]))
     for i, match in enumerate(chronological, start=1):
-        reaction_history.append({"label": f"M{i}", "value": match["reaction"]})
+        reaction_history.append({
+            "label": f"M{i}",
+            "value": match["reaction"],
+            "hesitation": match.get("hesitation"),
+        })
 
     player = {
         "name": "Whos",
