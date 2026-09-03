@@ -173,13 +173,15 @@ function emptyFlickStats() {
 }
 
 function emptyState() {
-  const zeros = { kd: 0, hs: 0, reaction: 0, firstShot: 0, counterStrafe: 0, pathEff: 0 };
+  const zeros = { kd: 0, hs: 0, reaction: 0, firstShot: 0, counterStrafe: 0, pathEff: 0, hesitation: null };
   return {
     source: "empty",
     player: {
       name: "Whos", matches: 0, engagements: 0, hoursTracked: 0,
       kd: 0, hs: 0, reaction: 0, firstShot: 0, counterStrafe: 0, pathEff: 0,
-      avgVelocity: 0, movingShots: 0, placementOffset: 0, headLevel: 0, preAimed: 0
+      avgVelocity: 0, movingShots: 0, placementOffset: 0, headLevel: 0, preAimed: 0,
+      hesitation: null,
+      preaimClass: { onHead: 0, tight: 0, loose: 0, wide: 0, n: 0, label: "" }
     },
     ranges: { "7": { ...zeros }, "30": { ...zeros }, all: { ...zeros } },
     reactionHistory: [],
@@ -270,24 +272,44 @@ function paintTrendEl(el, value, inverse = false) {
   el.className = `trend ${positive ? "positive" : "negative"}`;
 }
 
+function hesitationLine(value) {
+  if (value == null || value === "") return "";
+  const n = Number(value);
+  if (!Number.isFinite(n)) return "";
+  return `hesitation ${Math.round(n)}ms`;
+}
+
+function kpiCardHtml(card, glow) {
+  const sub = card.sub ? `<div class="kpi-sub">${card.sub}</div>` : "";
+  const valueClass = card.valueClass ? ` ${card.valueClass}` : "";
+  return `
+    <article class="kpi"${glow ? ` style="--glow:${glow}"` : ""}>
+      <div class="kpi-label">${card.icon ? `<span>${card.label}</span><svg viewBox="0 0 24 24"><path d="${card.icon}"/></svg>` : card.label}</div>
+      <div class="kpi-value${valueClass}">${card.value}</div>
+      ${sub}
+      <div class="kpi-foot">${card.foot}</div>
+    </article>`;
+}
+
 function renderKpis(range = "30") {
   const stats = data.ranges?.[range] || data.ranges?.["30"] || { kd: 0, hs: 0, reaction: 0, firstShot: 0, counterStrafe: 0 };
   const vs = rangeCompareLabel(range);
   const cards = [
     { label: "K/D RATIO", value: Number(stats.kd || 0).toFixed(2), foot: `${trend(stats.kdDelta)} ${vs}`, icon: "M4 18 10 12l4 4 6-8" },
     { label: "HEADSHOT RATE", value: `${Number(stats.hs || 0).toFixed(1)}<small>%</small>`, foot: `${trend(stats.hsDelta)} ${vs}`, icon: "M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18Zm0 5v8m-4-4h8" },
-    { label: "REACTION TIME", value: `${stats.reaction || 0}<small>ms</small>`, foot: `${trend(stats.reactionDelta, true)} faster`, icon: "m13 2-9 12h7l-1 8 9-12h-7l1-8Z" },
+    { label: "REACTION TIME", value: `${stats.reaction || 0}<small>ms</small>`, sub: hesitationLine(stats.hesitation) || "hesitation —", foot: `${trend(stats.reactionDelta, true)} faster`, icon: "m13 2-9 12h7l-1 8 9-12h-7l1-8Z" },
     { label: "FIRST SHOT", value: `${Number(stats.firstShot || 0).toFixed(1)}<small>%</small>`, foot: `${trend(stats.firstShotDelta)} accuracy`, icon: "M12 2v4m0 12v4M2 12h4m12 0h4M7 7l-3-3m13 3 3-3M7 17l-3 3m13-3 3 3" },
     { label: "COUNTER-STRAFE", value: `${Number(stats.counterStrafe || 0).toFixed(1)}<small>%</small>`, foot: `${trend(stats.counterStrafeDelta)} execution`, icon: "M5 12h14M9 8l-4 4 4 4m6-8 4 4-4 4" },
     { label: "PATH EFFICIENCY", value: `${Number(stats.pathEff || 0).toFixed(1)}<small>%</small>`, foot: `${trend(stats.pathEffDelta)} directness`, icon: "M4 19 20 5M14 5h6v6" }
   ];
-  $("#overallKpis").innerHTML = cards.map((card, i) => `
-    <article class="kpi" style="--glow:${["var(--accent)","var(--blue)","var(--accent-2)","var(--orange)","var(--accent)","var(--blue)"][i]}">
-      <div class="kpi-label"><span>${card.label}</span><svg viewBox="0 0 24 24"><path d="${card.icon}"/></svg></div>
-      <div class="kpi-value">${card.value}</div>
-      <div class="kpi-foot">${card.foot}</div>
-    </article>`).join("");
+  const glows = ["var(--accent)","var(--blue)","var(--accent-2)","var(--orange)","var(--accent)","var(--blue)"];
+  $("#overallKpis").innerHTML = cards.map((card, i) => kpiCardHtml(card, glows[i])).join("");
   $("#reactionCurrent").textContent = stats.reaction;
+  if ($("#placementOffset")) $("#placementOffset").textContent = `${stats.placementOffset ?? data.player?.placementOffset ?? 0}°`;
+  if ($("#headLevel")) $("#headLevel").textContent = `${stats.headLevel ?? data.player?.headLevel ?? 0}%`;
+  if ($("#preAimed")) $("#preAimed").textContent = `${stats.preAimed ?? data.player?.preAimed ?? 0}%`;
+  const mix = $("#placementMix");
+  if (mix) mix.textContent = classMixLabel(stats.preaimClass || data.player?.preaimClass);
   setGauge(stats.counterStrafe);
   paintTrendEl($("#counterTrend"), stats.counterStrafeDelta);
   paintRankKpis();
@@ -345,17 +367,22 @@ function reactionStroke(context) {
   return gradient;
 }
 
-function makeReactionChart(id, points, compact = false) {
+function makeReactionChart(id, points, compact = false, valueKey = null) {
   const el = document.getElementById(id);
   if (!el || charts[id]) return;
+  const pick = p => {
+    if (valueKey) return p[valueKey];
+    return p.value ?? p.reaction;
+  };
   charts[id] = new Chart(el, {
     type: "line",
     data: {
       labels: points.map((p, i) => compact ? i + 1 : p.label),
       datasets: [{
-        data: points.map(p => p.value ?? p.reaction),
+        data: points.map(pick),
         borderColor: reactionStroke, borderWidth: 1.6, pointRadius: 0, pointHoverRadius: 4,
-        pointHoverBackgroundColor: () => cssAccent(), fill: true, backgroundColor: lineGradient, tension: .35
+        pointHoverBackgroundColor: () => cssAccent(), fill: true, backgroundColor: lineGradient, tension: .35,
+        spanGaps: true
       }]
     },
     options: {
@@ -373,7 +400,10 @@ function makeReactionChart(id, points, compact = false) {
               const rnd = Number(point?.round);
               return Number.isFinite(rnd) && rnd > 0 ? `#${n} · Round ${rnd}` : `#${n}`;
             },
-            label: context => `${context.raw?.y ?? context.raw}ms`
+            label: context => {
+              const raw = context.raw?.y ?? context.raw;
+              return raw == null ? "—" : `${raw}ms`;
+            }
           }
         } : tooltipOptions("ms")
       },
@@ -400,9 +430,14 @@ function flickPointTooltip(raw) {
   const along = Number(raw.alongDeg) || 0;
   const vert = Number(raw.vertDeg) || 0;
   const cone = Number(raw.coneDeg) || 0;
-  const side = along > 0.05 ? "past" : along < -0.05 ? "short" : "on depth";
   const pitch = !vert ? "level" : `${Math.abs(vert).toFixed(1)}° ${vert > 0 ? "high" : "low"}`;
   const clip = raw.clipped ? " · off-scale" : "";
+  if (raw.type === "target") {
+    const depth = Math.abs(along);
+    if (depth < 0.05) return `${pitch} · cone ${cone.toFixed(1)}°${clip}`;
+    return `${depth.toFixed(1)}° off center · ${pitch} · cone ${cone.toFixed(1)}°${clip}`;
+  }
+  const side = along > 0.05 ? "past" : along < -0.05 ? "short" : "on depth";
   return `${Math.abs(along).toFixed(1)}° ${side} · ${pitch} · cone ${cone.toFixed(1)}°${clip}`;
 }
 
@@ -879,11 +914,12 @@ function drawLocationHeatmap(mode) {
         <div class="spot-grid">
           <div><span>Round</span><strong>${roundText ?? "—"}</strong></div>
           <div><span>Weapon</span><strong>${esc(engagement.weapon || "—")}</strong></div>
-          <div><span>Pre-aim</span><strong>${engagement.unattributed ? "—" : engagement.preaimHeld ? "already vis" : `${esc(engagement.preaim)}°`}</strong></div>
+          <div><span>Pre-aim</span><strong>${esc(fmtPreaimCell(engagement))}</strong></div>
           <div><span>Flick</span><strong>${esc(flickCell(engagement))}</strong></div>
           <div><span>Path</span><strong>${esc(fmtPathEff(engagement.pathEff))}</strong></div>
           <div><span>Landing</span><strong>${esc(landingLabel(engagement))}</strong></div>
           <div><span>Reaction</span><strong>${engagement.reaction != null ? `${esc(engagement.reaction)}ms` : "—"}</strong></div>
+          <div><span>Hesitation</span><strong>${engagement.hesitation != null ? `${esc(engagement.hesitation)}ms` : "—"}</strong></div>
           <div><span>TTK</span><strong>${engagement.ttk ? `${esc(engagement.ttk)}ms` : "—"}</strong></div>
           <div><span>1st shot</span><strong>${engagement.firstShot == null ? "—" : engagement.firstShot ? "HIT" : "MISS"}</strong></div>
           <div><span>Velocity</span><strong>${engagement.velocity != null ? `${esc(engagement.velocity)} u/s` : "—"}</strong></div>
@@ -966,6 +1002,40 @@ function fmtPathEff(value) {
   const n = Number(value);
   if (!Number.isFinite(n)) return "—";
   return `${Math.round(n)}%`;
+}
+
+function fmtMs(value) {
+  if (value == null || value === "") return "—";
+  const n = Number(value);
+  if (!Number.isFinite(n)) return "—";
+  return `${Math.round(n)}ms`;
+}
+
+function preaimClassLabel(value) {
+  const key = String(value || "").trim().toLowerCase();
+  if (key === "on head" || key === "onhead" || key === "on-head") return "on head";
+  if (key === "tight" || key === "loose" || key === "wide") return key;
+  return "";
+}
+
+function fmtPreaimCell(engagement) {
+  if (!engagement || engagement.unattributed) return "—";
+  if (engagement.preaimHeld) return "already vis";
+  const deg = engagement.preaim != null && engagement.preaim !== "" ? `${engagement.preaim}°` : "—";
+  const cls = preaimClassLabel(engagement.preaimClass);
+  return cls ? `${cls} ${deg}` : deg;
+}
+
+function classMixLabel(mix) {
+  if (!mix) return "";
+  if (mix.label) return mix.label;
+  const parts = [
+    [mix.onHead, "on head"],
+    [mix.tight, "tight"],
+    [mix.loose, "loose"],
+    [mix.wide, "wide"]
+  ].filter(([pct]) => Number(pct) > 0).map(([pct, name]) => `${pct}% ${name}`);
+  return parts.join(" · ");
 }
 
 function fmtKd(value) {
@@ -1536,14 +1606,16 @@ function renderLastMatch() {
   paintHero(m.thumbImage || m.mapImage, m.mapImage);
   paintScoreboard(m);
   syncHeatmapRoundControl(m);
+  const mix = classMixLabel(m.preaimClass);
   const kpis = [
-    ["K / D / A",`${m.kills} / ${m.deaths} / ${m.assists}`,"Match output"],
-    ["K/D RATIO",Number(m.kd || 0).toFixed(2),"Kills / deaths"],
-    ["HEADSHOTS",`${m.hs}%`,"Of kills"],
-    ["ADR",m.adr,"Damage / round"],
-    ["REACTION",`${m.reaction}<small>ms</small>`,"Visible time only"]
+    { label: "K / D / A", value: `${m.kills} / ${m.deaths} / ${m.assists}`, foot: "Match output" },
+    { label: "K/D RATIO", value: Number(m.kd || 0).toFixed(2), foot: "Kills / deaths" },
+    { label: "HEADSHOTS", value: `${m.hs}%`, foot: "Of kills" },
+    { label: "ADR", value: m.adr, foot: "Damage / round" },
+    { label: "REACTION", value: `${m.reaction}<small>ms</small>`, sub: hesitationLine(m.hesitation) || "hesitation —", foot: "Visible time only" },
+    { label: "PLACEMENT", value: mix || "—", valueClass: mix ? "is-mix" : "", foot: `${m.preaim ?? 0}° avg · ${m.headLevel ?? 0}% head-level` }
   ];
-  $("#matchKpis").innerHTML = kpis.map(([label,value,foot]) => `<article class="kpi"><div class="kpi-label">${label}</div><div class="kpi-value">${value}</div><div class="kpi-foot">${foot}</div></article>`).join("");
+  $("#matchKpis").innerHTML = kpis.map(card => kpiCardHtml(card)).join("");
   const maxRounds = Math.max(m.side.ct.rounds, m.side.t.rounds, 13);
   $("#sideSplit").innerHTML = [["CT SIDE",m.side.ct,"#69a7ff"],["T SIDE",m.side.t,"#ffb164"]].map(([name,side,color]) => `
     <div class="side-card"><div class="side-card-head"><span>${name}</span><strong>${side.rounds} rounds</strong></div>
@@ -1553,8 +1625,9 @@ function renderLastMatch() {
     <tr data-id="${e.id}" data-round="${engagementRound(e) ?? ""}"><td>${String(e.id).padStart(2,"0")}</td><td><span class="result-pill ${(e.result || "").toLowerCase()}${e.unattributed ? " unattributed" : ""}">${e.result || "—"}</span></td>
     <td>${engagementRound(e) ?? "—"}</td>
     <td>${e.weapon || "—"}</td>
-    <td>${e.unattributed ? "—" : e.preaimHeld ? "already vis" : `${e.preaim}°`}</td><td>${esc(flickCell(e))}</td><td>${fmtPathEff(e.pathEff)}</td><td><span class="landing-pill ${noFlickDetected(e) ? "none" : e.landing}">${esc(landingPillText(e))}</span></td>
-    <td><strong>${e.reaction != null ? `${e.reaction}ms` : "—"}</strong></td><td>${e.ttk ? `${e.ttk}ms` : "—"}</td><td>${e.firstShot == null ? "—" : e.firstShot ? "HIT" : "MISS"}</td><td>${e.velocity != null ? `${e.velocity} u/s` : "—"}</td></tr>`).join("");
+    <td>${esc(fmtPreaimCell(e))}</td><td>${esc(flickCell(e))}</td><td>${fmtPathEff(e.pathEff)}</td><td><span class="landing-pill ${noFlickDetected(e) ? "none" : e.landing}">${esc(landingPillText(e))}</span></td>
+    <td><strong>${e.reaction != null ? `${e.reaction}ms` : "—"}</strong></td>
+    <td>${e.hesitation != null ? `${e.hesitation}ms` : "—"}</td><td>${e.ttk ? `${e.ttk}ms` : "—"}</td><td>${e.firstShot == null ? "—" : e.firstShot ? "HIT" : "MISS"}</td><td>${e.velocity != null ? `${e.velocity} u/s` : "—"}</td></tr>`).join("");
   highlightEngagementRow(selectedSpotId);
   syncEngagementRoundHighlight();
   const radar = $("#radarImage");
@@ -1701,7 +1774,7 @@ function renderMatches() {
         <button type="button" class="match-delete" data-delete="${esc(m.id)}" aria-label="Delete match">×</button>
       </div>
       <div class="match-details"><div class="detail-grid">
-        ${[["Headshots",`${m.hs}%`],["ADR",m.adr],["First shot",`${m.firstShot}%`],["Counter-strafe",`${m.counterStrafe}%`],["Pre-aim",`${m.preaim}°`],["Head-level",`${m.headLevel ?? 0}%`],["TTK",`${m.ttk}ms`]].map(([l,v])=>`<div class="detail-box"><span>${l}</span><strong>${v}</strong></div>`).join("")}
+        ${[["Headshots",`${m.hs}%`],["ADR",m.adr],["First shot",`${m.firstShot}%`],["Counter-strafe",`${m.counterStrafe}%`],["Pre-aim",`${m.preaim}°`],["Placement", classMixLabel(m.preaimClass) || "—"],["Head-level",`${m.headLevel ?? 0}%`],["TTK",`${m.ttk}ms`],["Hesitation", fmtMs(m.hesitation)]].map(([l,v])=>`<div class="detail-box"><span>${l}</span><strong>${v}</strong></div>`).join("")}
         <div class="land-strip"><span>UNDER ${m.landing.under}%</span><i class="u" style="width:${m.landing.under*2}px"></i><span>ON ${m.landing.target}%</span><i class="t" style="width:${m.landing.target*2}px"></i><span>OVER ${m.landing.over}%</span><i class="o" style="width:${m.landing.over*2}px"></i></div>
       </div></div>
     </article>`).join("");
@@ -2723,9 +2796,6 @@ function paintDashboard() {
     (data.matches || []).forEach(decorateMatch);
     const range = $("#rangeControl .active")?.dataset.range || "30";
     renderKpis(range);
-    if ($("#placementOffset")) $("#placementOffset").textContent = `${data.player?.placementOffset ?? 0}°`;
-    if ($("#headLevel")) $("#headLevel").textContent = `${data.player?.headLevel ?? 0}%`;
-    if ($("#preAimed")) $("#preAimed").textContent = `${data.player?.preAimed ?? 0}%`;
     renderLastMatch();
     renderMatches();
     renderMaps();
